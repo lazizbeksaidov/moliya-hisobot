@@ -77,13 +77,11 @@ async function init() {
     await afterAuth(user);
   };
 
-  // Decide screen
+  // Decide screen — Auth majburiy
   if (window.DB.isCloud()) {
     await afterAuth(window.DB.user);
-  } else if (localStorage.getItem('fin_skip_auth') === '1' || !window.DB.isConfigured()) {
-    showApp();
-    await loadAll();
-    renderAll();
+  } else if (!window.DB.isConfigured()) {
+    showSetup();
   } else {
     showAuth();
   }
@@ -123,14 +121,7 @@ function showSetup() {
 function hideSetup() {
   document.getElementById('setupScreen').style.display = 'none';
   if (window.DB.isCloud()) showApp();
-  else if (localStorage.getItem('fin_skip_auth') === '1') showApp();
   else showAuth();
-}
-
-function useLocalMode() {
-  localStorage.setItem('fin_skip_auth', '1');
-  showApp();
-  loadAll().then(renderAll);
 }
 
 // ============ AUTH ============
@@ -169,7 +160,6 @@ async function doAuth(e) {
 
 async function signOut() {
   await window.DB.signOut();
-  localStorage.removeItem('fin_skip_auth');
   showAuth();
 }
 

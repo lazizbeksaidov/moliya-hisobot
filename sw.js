@@ -1,5 +1,5 @@
 // Simple PWA service worker — network-first with cache fallback
-const CACHE = 'moliya-v1';
+const CACHE = 'moliya-v2';
 const ASSETS = [
   './',
   './index.html',
