@@ -508,9 +508,18 @@ function renderCredits() {
   } else {
     list.innerHTML = state.credits.map(c => renderCreditCard(c)).join('');
   }
-  const totalRemaining = state.credits.reduce((s,c) => s + Math.max(0, c.amount - (c.paid||0)), 0);
-  const monthlySum = state.credits.reduce((s,c) => s + (Math.max(0, c.amount - (c.paid||0)) > 0 ? Number(c.monthly) : 0), 0);
-  const paidSum = state.credits.reduce((s,c) => s + Number(c.paid || 0), 0);
+  const totalRemaining = state.credits.reduce((s,c) => {
+    const pm = Number(c.paid_months || Math.round((c.paid||0) / (c.monthly||1)));
+    return s + Math.max(0, (Number(c.months) - pm)) * Number(c.monthly);
+  }, 0);
+  const monthlySum = state.credits.reduce((s,c) => {
+    const pm = Number(c.paid_months || Math.round((c.paid||0) / (c.monthly||1)));
+    return s + ((Number(c.months) - pm) > 0 ? Number(c.monthly) : 0);
+  }, 0);
+  const paidSum = state.credits.reduce((s,c) => {
+    const pm = Number(c.paid_months || Math.round((c.paid||0) / (c.monthly||1)));
+    return s + pm * Number(c.monthly);
+  }, 0);
   document.getElementById('creditTotalRemaining').textContent = fmt(totalRemaining);
   document.getElementById('creditMonthlySum').textContent = fmt(monthlySum);
   document.getElementById('creditTotalPaid').textContent = fmt(paidSum);
@@ -521,7 +530,10 @@ function renderCreditCard(c) {
   const totalMonths = Number(c.months);
   const paidMonths = Number(c.paid_months || Math.round((c.paid || 0) / (monthly || 1)));
   const remainingMonths = Math.max(0, totalMonths - paidMonths);
-  const remaining = Math.max(0, c.amount - (c.paid || 0));
+  // Asosiy hisob: oylik to'lov × oy soni (foiz oylik to'lovga kiritilgan)
+  const totalToPay = monthly * totalMonths;
+  const paid = paidMonths * monthly;
+  const remaining = remainingMonths * monthly;
   const progress = totalMonths > 0 ? (paidMonths / totalMonths) * 100 : 0;
   const startDate = c.start || c.start_date;
 
@@ -581,8 +593,9 @@ function renderCreditCard(c) {
       <div class="progress"><div class="progress-fill" style="width:${progress}%"></div></div>
       <div class="credit-progress-info">
         <span><b>${paidMonths}/${totalMonths}</b> oy to'langan (${progress.toFixed(0)}%)</span>
-        <span>${fmt(c.paid || 0)} / ${fmt(c.amount)}</span>
+        <span>${fmt(paid)} / ${fmt(totalToPay)}</span>
       </div>
+      ${Number(c.amount) && Math.abs(Number(c.amount) - totalToPay) > 1000 ? `<div class="muted" style="font-size:11px;margin-bottom:10px">Asl summa (foizsiz): ${fmt(c.amount)} · Foiz bilan jami: ${fmt(totalToPay)}</div>` : ''}
 
       ${nextPaymentHtml}
 
@@ -916,8 +929,14 @@ function renderDashboard() {
   const start = Number(window.DB.profile?.start_balance || 0);
   const balance = start + totalIncome - totalExpense;
 
-  const totalCredit = state.credits.reduce((s,c) => s + Math.max(0, c.amount - (c.paid||0)), 0);
-  const monthlyPayment = state.credits.reduce((s,c) => s + (Math.max(0, c.amount - (c.paid||0)) > 0 ? Number(c.monthly) : 0), 0);
+  const totalCredit = state.credits.reduce((s,c) => {
+    const pm = Number(c.paid_months || Math.round((c.paid||0) / (c.monthly||1)));
+    return s + Math.max(0, (Number(c.months) - pm)) * Number(c.monthly);
+  }, 0);
+  const monthlyPayment = state.credits.reduce((s,c) => {
+    const pm = Number(c.paid_months || Math.round((c.paid||0) / (c.monthly||1)));
+    return s + ((Number(c.months) - pm) > 0 ? Number(c.monthly) : 0);
+  }, 0);
 
   const saving = monthIncome - monthExpense;
   const savingPct = monthIncome > 0 ? (saving / monthIncome * 100) : 0;
