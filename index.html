@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.28/dist/jspdf.plugin.autotable.min.js"></script>
-<link rel="stylesheet" href="styles.css?v=12">
+<link rel="stylesheet" href="styles.css?v=13">
 </head>
 <body>
 
@@ -112,6 +112,7 @@
       <button class="nav-item" data-tab="calendar"><span class="nav-icon">📆</span>Kalendar</button>
       <button class="nav-item" data-tab="credits"><span class="nav-icon">🏦</span><span data-i18n="nav.credits">Kreditlar</span></button>
       <button class="nav-item" data-tab="debts"><span class="nav-icon">💳</span><span data-i18n="nav.debts">Qarzlar</span></button>
+      <button class="nav-item" data-tab="installments"><span class="nav-icon">🛒</span>Nasiya / Muddatli</button>
       <button class="nav-item" data-tab="subscriptions"><span class="nav-icon">📺</span><span data-i18n="nav.subs">Obunalar</span></button>
       <button class="nav-item" data-tab="income"><span class="nav-icon">💰</span><span data-i18n="nav.income">Daromad</span></button>
       <button class="nav-item" data-tab="expenses"><span class="nav-icon">💸</span><span data-i18n="nav.expenses">Xarajatlar</span></button>
@@ -289,20 +290,40 @@
           <div class="stat-icon">⬆️</div>
           <div class="stat-content"><div class="stat-label">Menga qarzdorlar</div><div class="stat-value" id="debtOwedToMe">0</div></div>
         </div>
-        <div class="stat-card stat-credit">
-          <div class="stat-icon">📅</div>
-          <div class="stat-content"><div class="stat-label">Muddatli to'lov qoldig'i</div><div class="stat-value" id="debtInstallmentTotal">0</div></div>
-        </div>
       </div>
 
       <div class="filters">
         <button class="period-btn active" data-debt-filter="all">Barchasi</button>
         <button class="period-btn" data-debt-filter="i_owe">Men qarzdorman</button>
         <button class="period-btn" data-debt-filter="owed_to_me">Menga qarzdorlar</button>
-        <button class="period-btn" data-debt-filter="installment">Muddatli to'lov</button>
       </div>
 
       <div class="credits-list" id="debtsList"></div>
+    </section>
+
+    <!-- INSTALLMENTS / NASIYA -->
+    <section class="tab" id="tab-installments">
+      <header class="page-header">
+        <div><h1>Nasiya / Muddatli to'lov</h1><p class="subtitle">Do'kondan yoki kompaniyadan rasrochkaga olganlaringiz (iPhone, mebel, texnika)</p></div>
+        <button class="btn btn-primary" onclick="openInstallmentModal()">+ Nasiya qo'shish</button>
+      </header>
+
+      <div class="stats-grid stats-grid-3">
+        <div class="stat-card stat-credit">
+          <div class="stat-icon">🛒</div>
+          <div class="stat-content"><div class="stat-label">Faol nasiyalar</div><div class="stat-value" id="instActiveCount">0</div></div>
+        </div>
+        <div class="stat-card stat-expense">
+          <div class="stat-icon">📅</div>
+          <div class="stat-content"><div class="stat-label">Oylik to'lov (jami)</div><div class="stat-value" id="instMonthlySum">0</div></div>
+        </div>
+        <div class="stat-card stat-income">
+          <div class="stat-icon">⏳</div>
+          <div class="stat-content"><div class="stat-label">Eng yaqin to'lov</div><div class="stat-value" id="instNextDate">—</div><div class="stat-meta" id="instNextInfo"></div></div>
+        </div>
+      </div>
+
+      <div class="credits-list" id="installmentsList"></div>
     </section>
 
     <!-- SUBSCRIPTIONS -->
@@ -570,8 +591,8 @@
   <nav class="mobile-nav" id="mobileNav">
     <button class="mnav active" data-tab="dashboard"><span>📊</span>Bosh</button>
     <button class="mnav" data-tab="calendar"><span>📆</span>Kalendar</button>
+    <button class="mnav" data-tab="installments"><span>🛒</span>Nasiya</button>
     <button class="mnav" data-tab="subscriptions"><span>📺</span>Obuna</button>
-    <button class="mnav" data-tab="expenses"><span>💸</span>Xarajat</button>
     <button class="mnav" data-tab="settings"><span>⚙️</span>Boshqa</button>
   </nav>
 </div>
@@ -788,6 +809,44 @@
   </div>
 </div>
 
+<!-- INSTALLMENT MODAL -->
+<div class="modal" id="installmentModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="installmentModalTitle">Yangi nasiya</h3>
+      <button class="close" onclick="closeModal('installmentModal')">×</button>
+    </div>
+    <form id="installmentForm" onsubmit="saveInstallment(event)">
+      <input type="hidden" id="installmentId">
+      <div class="form-group">
+        <label>Mahsulot / Nomi</label>
+        <input type="text" id="installmentTitle" required placeholder="iPhone 15 Pro, Samsung TV, Mebel...">
+      </div>
+      <div class="form-group">
+        <label>Do'kon / Kompaniya</label>
+        <input type="text" id="installmentPerson" placeholder="Texnomart, Mediapark, Idea...">
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Umumiy summa</label><input type="number" id="installmentAmount" required min="0" step="any" inputmode="numeric" placeholder="Umumiy narx"></div>
+        <div class="form-group"><label>Oylik to'lov</label><input type="number" id="installmentMonthly" required min="0" step="any" inputmode="numeric"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Muddat (oy)</label><input type="number" id="installmentMonths" required min="1" placeholder="12, 24..."></div>
+        <div class="form-group"><label>To'lov kuni (har oyning)</label><input type="number" id="installmentPayDay" min="1" max="31" placeholder="15"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Hozirgacha to'langan oy</label><input type="number" id="installmentPaidMonths" min="0" value="0"></div>
+        <div class="form-group"><label>Keyingi to'lov sanasi</label><input type="date" id="installmentDueDate"></div>
+      </div>
+      <div class="form-group"><label>Izoh</label><input type="text" id="installmentNote" placeholder="Ixtiyoriy"></div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('installmentModal')">Bekor</button>
+        <button type="submit" class="btn btn-primary">Saqlash</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- DEBT MODAL -->
 <div class="modal" id="debtModal">
   <div class="modal-content">
@@ -802,8 +861,8 @@
         <select id="debtKind" required onchange="toggleDebtFields()">
           <option value="i_owe">⬇️ Men qarzdorman (kimdandir oldim)</option>
           <option value="owed_to_me">⬆️ Menga qarzdor (kimgadir berdim)</option>
-          <option value="installment">📅 Muddatli to'lov (do'kondan rasrochkaga oldim)</option>
         </select>
+        <div class="hint-text">Nasiya/muddatli to'lovlar uchun alohida "Nasiya" tab bor</div>
       </div>
       <div class="form-group">
         <label>Nomi / Tavsif</label>
@@ -848,10 +907,10 @@
 <div class="toast" id="toast"></div>
 <div class="loading" id="loading"><div class="spinner"></div></div>
 
-<script src="config.js?v=12"></script>
-<script src="db.js?v=12"></script>
-<script src="app.js?v=12"></script>
-<script src="features.js?v=12"></script>
+<script src="config.js?v=13"></script>
+<script src="db.js?v=13"></script>
+<script src="app.js?v=13"></script>
+<script src="features.js?v=13"></script>
 <script>
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {

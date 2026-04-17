@@ -281,6 +281,7 @@ function renderAll() {
   renderCalendar();
   renderCredits();
   renderDebts();
+  renderInstallments();
   if (typeof renderSubs === 'function') renderSubs();
   renderIncome();
   renderExpenses();
@@ -334,6 +335,7 @@ function switchTab(name) {
   if (name === 'credits') renderCredits();
   if (name === 'calendar') renderCalendar();
   if (name === 'subscriptions' && typeof renderSubs === 'function') { renderSubs(); renderSubPresets(); }
+  if (name === 'installments') renderInstallments();
 }
 
 // ============ MODAL ============
@@ -1487,7 +1489,9 @@ async function markDebtMonthPaid(id) {
 function renderDebts() {
   const list = document.getElementById('debtsList');
   if (!list) return;
-  const filtered = state.debts.filter(d => state.debtFilter === 'all' || d.kind === state.debtFilter);
+  // Nasiyani chiqarib tashlaymiz (alohida tab bor)
+  const nonInstallment = state.debts.filter(d => d.kind !== 'installment');
+  const filtered = nonInstallment.filter(d => state.debtFilter === 'all' || d.kind === state.debtFilter);
 
   // Stats
   const iOweTotal = state.debts.filter(d => d.kind === 'i_owe').reduce((s,d) => s + Math.max(0, Number(d.amount) - Number(d.paid||0)), 0);
@@ -1571,6 +1575,206 @@ function renderDebtCard(d) {
     </div>`;
 }
 
+// ============ INSTALLMENTS (NASIYA) ============
+// Uses debts table with kind='installment'
+
+function openInstallmentModal(id) {
+  document.getElementById('installmentForm').reset();
+  document.getElementById('installmentId').value = '';
+  document.getElementById('installmentPaidMonths').value = 0;
+  document.getElementById('installmentModalTitle').textContent = 'Yangi nasiya';
+  if (id) {
+    const d = state.debts.find(x => x.id === id && x.kind === 'installment');
+    if (d) {
+      document.getElementById('installmentId').value = d.id;
+      document.getElementById('installmentTitle').value = d.title;
+      document.getElementById('installmentPerson').value = d.person || '';
+      document.getElementById('installmentAmount').value = d.amount;
+      document.getElementById('installmentMonthly').value = d.monthly || '';
+      document.getElementById('installmentMonths').value = d.months || '';
+      document.getElementById('installmentPayDay').value = d.payment_day || '';
+      document.getElementById('installmentPaidMonths').value = d.paid_months || 0;
+      document.getElementById('installmentDueDate').value = d.due_date || '';
+      document.getElementById('installmentNote').value = d.note || '';
+      document.getElementById('installmentModalTitle').textContent = 'Nasiyani tahrirlash';
+    }
+  }
+  document.getElementById('installmentModal').classList.add('active');
+}
+
+async function saveInstallment(e) {
+  e.preventDefault();
+  const id = document.getElementById('installmentId').value;
+  const monthly = parseFloat(document.getElementById('installmentMonthly').value);
+  const paidMonths = parseInt(document.getElementById('installmentPaidMonths').value) || 0;
+  const payDay = parseInt(document.getElementById('installmentPayDay').value);
+  const data = {
+    title: document.getElementById('installmentTitle').value.trim(),
+    kind: 'installment',
+    person: document.getElementById('installmentPerson').value.trim(),
+    amount: parseFloat(document.getElementById('installmentAmount').value),
+    monthly,
+    months: parseInt(document.getElementById('installmentMonths').value),
+    paid_months: paidMonths,
+    paid: paidMonths * monthly,
+    due_date: document.getElementById('installmentDueDate').value || null,
+    payment_day: (payDay && payDay >= 1 && payDay <= 31) ? payDay : null,
+    note: document.getElementById('installmentNote').value.trim(),
+  };
+  setLoading(true);
+  try {
+    if (id) {
+      const updated = await window.DB.update('debts', id, data);
+      const i = state.debts.findIndex(x => x.id === id);
+      if (i >= 0) state.debts[i] = updated;
+    } else {
+      const row = await window.DB.insert('debts', data);
+      state.debts.push(row);
+    }
+    closeModal('installmentModal');
+    toast('Nasiya saqlandi');
+    renderInstallments();
+    renderCalendar();
+  } catch (err) { toast(err.message, 'error'); }
+  finally { setLoading(false); }
+}
+
+async function deleteInstallment(id) {
+  if (!confirm("Nasiyani o'chirishni tasdiqlaysizmi?")) return;
+  setLoading(true);
+  try {
+    await window.DB.remove('debts', id);
+    state.debts = state.debts.filter(x => x.id !== id);
+    toast("O'chirildi");
+    renderInstallments();
+    renderCalendar();
+  } catch (err) { toast(err.message, 'error'); }
+  finally { setLoading(false); }
+}
+
+async function markInstallmentMonthPaid(id) {
+  const d = state.debts.find(x => x.id === id);
+  if (!d) return;
+  const paidMonths = Number(d.paid_months || 0);
+  if (paidMonths >= d.months) { toast("Allaqachon to'liq to'langan"); return; }
+  const addExpense = localStorage.getItem('fin_autoexpense') === '1';
+  setLoading(true);
+  try {
+    const newPaidMonths = paidMonths + 1;
+    const newPaid = newPaidMonths * Number(d.monthly);
+    const updated = await window.DB.update('debts', id, { paid: newPaid, paid_months: newPaidMonths });
+    const i = state.debts.findIndex(x => x.id === id);
+    if (i >= 0) state.debts[i] = updated;
+    if (addExpense) {
+      const ex = await window.DB.insert('expenses', {
+        category: 'Boshqa', amount: Number(d.monthly), date: today(),
+        note: `${d.title} nasiya ${newPaidMonths}-oy`,
+      });
+      state.expenses.push(ex);
+      renderExpenses();
+    }
+    toast(`✓ ${newPaidMonths}-oy to'lovi belgilandi`);
+    renderInstallments();
+    renderDashboard();
+    renderCalendar();
+  } catch (err) { toast(err.message, 'error'); }
+  finally { setLoading(false); }
+}
+
+// installment uchun to'lov sanasi (due_date'dan boshlab hisoblab)
+function installmentPaymentDate(d, monthIdx) {
+  const paidMonths = Number(d.paid_months || 0);
+  const base = d.due_date;
+  if (!base) return null;
+  const offset = monthIdx - paidMonths - 1;
+  return withPaymentDay(addMonths(base, offset), d.payment_day);
+}
+
+function renderInstallments() {
+  const list = document.getElementById('installmentsList');
+  if (!list) return;
+  const items = state.debts.filter(d => d.kind === 'installment');
+  const active = items.filter(d => Number(d.paid_months || 0) < Number(d.months || 0));
+  const monthlySum = active.reduce((s,d) => s + Number(d.monthly || 0), 0);
+
+  // Eng yaqin to'lov
+  let nextDate = null, nextItem = null;
+  active.forEach(d => {
+    const pm = Number(d.paid_months || 0);
+    const dt = installmentPaymentDate(d, pm + 1);
+    if (dt && (!nextDate || dt < nextDate)) { nextDate = dt; nextItem = d; }
+  });
+
+  const setT = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setT('instActiveCount', active.length + ' ta');
+  setT('instMonthlySum', fmt(monthlySum));
+  setT('instNextDate', nextDate ? fmtDate(nextDate) : '—');
+  setT('instNextInfo', nextItem ? `${nextItem.title} · ${fmt(nextItem.monthly)}` : '');
+
+  if (!items.length) {
+    list.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">🛒</div><div>Hozircha nasiya yo'q</div><div style="margin-top:8px;font-size:12px;">iPhone, mebel, texnika — rasrochkaga olganlaringiz bu yerga</div></div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(d => {
+    const monthly = Number(d.monthly || 0);
+    const totalMonths = Number(d.months || 0);
+    const paidMonths = Number(d.paid_months || 0);
+    const remainingMonths = Math.max(0, totalMonths - paidMonths);
+    const progress = totalMonths > 0 ? (paidMonths / totalMonths) * 100 : 0;
+
+    let nextHtml = '';
+    if (paidMonths < totalMonths) {
+      const dt = installmentPaymentDate(d, paidMonths + 1);
+      const todayStr = today();
+      const cls = dt && dt < todayStr ? 'overdue' : (dt === todayStr ? 'due' : '');
+      const label = dt && dt < todayStr ? '⚠️ Muddat o\'tdi' : dt === todayStr ? '🔔 Bugun' : 'Keyingi to\'lov';
+      nextHtml = `
+        <div class="next-payment ${cls}">
+          <div class="next-payment-info">
+            <div class="next-payment-label">${label} · ${paidMonths + 1}/${totalMonths}-oy</div>
+            <div class="next-payment-date">${dt ? fmtDate(dt) : '—'}</div>
+          </div>
+          <div class="next-payment-amount">${fmt(monthly)}</div>
+          <button class="btn-pay" onclick="markInstallmentMonthPaid('${d.id}')">✓ To'ladim</button>
+        </div>`;
+    } else {
+      nextHtml = `<div class="next-payment done"><div class="next-payment-info"><div class="next-payment-label">🎉 Tabriklayman!</div><div class="next-payment-date">To'liq to'landi</div></div></div>`;
+    }
+
+    const totalAmount = monthly * totalMonths;
+
+    return `
+      <div class="credit-card">
+        <div class="credit-top">
+          <div>
+            <div class="credit-bank">🛒 ${escapeHtml(d.title)}</div>
+            ${d.person ? `<div class="credit-purpose">${escapeHtml(d.person)}</div>` : ''}
+          </div>
+        </div>
+        <div class="credit-label">Qolgan muddat</div>
+        <div class="credit-amount-main">${remainingMonths} oy</div>
+        <div class="progress"><div class="progress-fill" style="width:${progress}%"></div></div>
+        <div class="credit-progress-info">
+          <span><b>${paidMonths}/${totalMonths}</b> oy to'langan</span>
+          <span>${progress.toFixed(0)}%</span>
+        </div>
+        ${nextHtml}
+        <div class="credit-details">
+          <div><div class="credit-detail-label">Oylik</div><div class="credit-detail-value">${fmt(monthly)}</div></div>
+          <div><div class="credit-detail-label">Umumiy</div><div class="credit-detail-value">${fmt(d.amount || totalAmount)}</div></div>
+          <div><div class="credit-detail-label">Muddat</div><div class="credit-detail-value">${totalMonths} oy</div></div>
+          ${d.payment_day ? `<div><div class="credit-detail-label">To'lov kuni</div><div class="credit-detail-value">Har oyning ${d.payment_day}-sanasi</div></div>` : ''}
+        </div>
+        ${d.note ? `<div class="muted" style="font-size:12px;margin-top:8px">${escapeHtml(d.note)}</div>` : ''}
+        <div class="credit-actions">
+          <button class="btn btn-secondary" style="flex:1" onclick="openInstallmentModal('${d.id}')">✏️ Tahrirlash</button>
+          <button class="icon-btn danger" onclick="deleteInstallment('${d.id}')">🗑️</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
 // ============ CALENDAR ============
 const UZ_MONTHS = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
 
@@ -1601,14 +1805,14 @@ function collectEvents() {
     }
   });
 
-  // QARZLAR
+  // QARZLAR / NASIYALAR
   state.debts.forEach(d => {
     if (d.kind === 'installment') {
       const totalMonths = Number(d.months || 0);
       const paidMonths = Number(d.paid_months || 0);
-      const base = d.due_date || d.created_at?.split('T')[0] || today();
       for (let i = 1; i <= totalMonths; i++) {
-        const date = addMonths(base, i - 1);
+        const date = installmentPaymentDate(d, i);
+        if (!date) continue;
         push(date, {
           type: 'installment',
           title: d.title,
@@ -1618,7 +1822,7 @@ function collectEvents() {
           totalMonths,
           paid: i <= paidMonths,
           id: d.id,
-          action: 'markDebtMonthPaid',
+          action: 'markInstallmentMonthPaid',
         });
       }
     } else if (d.due_date) {
