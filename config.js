@@ -11,6 +11,6 @@
 // ============================================================
 
 window.SUPABASE_CONFIG = {
-  url:     '',  // Masalan: 'https://abcdefgh.supabase.co'
-  anonKey: '',  // Masalan: 'eyJhbGci...'
+  url:     'https://ojnumathqctjzktklqwe.supabase.co',
+  anonKey: 'sb_publishable_vQj4YAzsz4zGEGeaoDROsA_xRMp6JSY',
 };
