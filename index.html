@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="styles.css?v=7">
+<link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
 
@@ -157,9 +157,9 @@
         <div class="stat-card stat-credit">
           <div class="stat-icon">🏦</div>
           <div class="stat-content">
-            <div class="stat-label">Kredit qarzi</div>
+            <div class="stat-label">Kreditlar (oylik)</div>
             <div class="stat-value" id="totalCredit">0</div>
-            <div class="stat-meta" id="monthlyPayment">Oylik to'lov: 0</div>
+            <div class="stat-meta" id="monthlyPayment">0 ta faol kredit</div>
           </div>
         </div>
         <div class="stat-card stat-saving">
@@ -209,16 +209,16 @@
       </header>
       <div class="stats-grid stats-grid-3">
         <div class="stat-card stat-credit">
-          <div class="stat-icon">💳</div>
-          <div class="stat-content"><div class="stat-label">Umumiy qoldiq</div><div class="stat-value" id="creditTotalRemaining">0</div></div>
+          <div class="stat-icon">📅</div>
+          <div class="stat-content"><div class="stat-label">Oylik to'lov (jami)</div><div class="stat-value" id="creditMonthlySum">0</div></div>
         </div>
         <div class="stat-card stat-expense">
-          <div class="stat-icon">📅</div>
-          <div class="stat-content"><div class="stat-label">Oylik to'lov</div><div class="stat-value" id="creditMonthlySum">0</div></div>
+          <div class="stat-icon">⏳</div>
+          <div class="stat-content"><div class="stat-label">Eng yaqin to'lov</div><div class="stat-value" id="creditNextDate">—</div><div class="stat-meta" id="creditNextInfo"></div></div>
         </div>
         <div class="stat-card stat-income">
-          <div class="stat-icon">✅</div>
-          <div class="stat-content"><div class="stat-label">To'langan</div><div class="stat-value" id="creditTotalPaid">0</div></div>
+          <div class="stat-icon">🏦</div>
+          <div class="stat-content"><div class="stat-label">Faol kreditlar</div><div class="stat-value" id="creditActiveCount">0</div><div class="stat-meta" id="creditPaidMonthsTotal"></div></div>
         </div>
       </div>
       <div class="credits-list" id="creditsList"></div>
@@ -424,8 +424,8 @@
       <div class="form-group"><label>Bank nomi</label><input type="text" id="creditBank" required placeholder="Kapitalbank"></div>
       <div class="form-group"><label>Maqsad</label><input type="text" id="creditPurpose" placeholder="Avtomobil, uy-joy..."></div>
       <div class="form-row">
-        <div class="form-group"><label>Umumiy summa</label><input type="number" id="creditAmount" required min="0" step="any" inputmode="numeric"></div>
-        <div class="form-group"><label>Foiz (%)</label><input type="number" id="creditRate" required min="0" step="0.1" value="0"></div>
+        <div class="form-group"><label>Umumiy summa <span class="hint">(ixtiyoriy)</span></label><input type="number" id="creditAmount" min="0" step="any" inputmode="numeric"></div>
+        <div class="form-group"><label>Foiz (%) <span class="hint">(ixtiyoriy)</span></label><input type="number" id="creditRate" min="0" step="0.1" value="0"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Muddat (oy)</label><input type="number" id="creditMonths" required min="1" value="12"></div>
@@ -631,9 +631,9 @@
 <div class="toast" id="toast"></div>
 <div class="loading" id="loading"><div class="spinner"></div></div>
 
-<script src="config.js?v=7"></script>
-<script src="db.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<script src="config.js?v=8"></script>
+<script src="db.js?v=8"></script>
+<script src="app.js?v=8"></script>
 <script>
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
