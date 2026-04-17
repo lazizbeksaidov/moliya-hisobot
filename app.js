@@ -1001,6 +1001,8 @@ function renderDashboard() {
   document.getElementById('monthExpenseCount').textContent = `${monthExpenseCount} ta chiqim`;
   document.getElementById('totalCredit').textContent = fmt(monthlyPayment);
   document.getElementById('monthlyPayment').textContent = `${activeCreditsList.length} ta faol kredit`;
+
+  renderMonthSummary();
   document.getElementById('monthSaving').textContent = fmt(saving);
   document.getElementById('savingPercent').textContent = `${savingPct.toFixed(1)}% daromaddan`;
 
@@ -1575,6 +1577,90 @@ function renderDebtCard(d) {
     </div>`;
 }
 
+// ============ MONTH SUMMARY (Bosh sahifa) ============
+function renderMonthSummary() {
+  const box = document.getElementById('monthSummary');
+  if (!box) return;
+
+  const now = new Date();
+  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  // KREDITLAR — shu oyga tushadigan faol kreditlar
+  let creditSum = 0, creditCount = 0;
+  state.credits.forEach(c => {
+    const pm = Number(c.paid_months || 0);
+    const totalM = Number(c.months || 0);
+    if (pm >= totalM) return;
+    // Keyingi to'lov shu oyda tushadimi?
+    const nextDate = creditPaymentDate(c, pm + 1);
+    if (nextDate && nextDate.startsWith(monthPrefix)) {
+      creditSum += Number(c.monthly || 0);
+      creditCount++;
+    }
+  });
+
+  // NASIYALAR
+  let instSum = 0, instCount = 0;
+  state.debts.filter(d => d.kind === 'installment').forEach(d => {
+    const pm = Number(d.paid_months || 0);
+    const totalM = Number(d.months || 0);
+    if (pm >= totalM) return;
+    const nextDate = installmentPaymentDate(d, pm + 1);
+    if (nextDate && nextDate.startsWith(monthPrefix)) {
+      instSum += Number(d.monthly || 0);
+      instCount++;
+    }
+  });
+
+  // OBUNALAR
+  let subSum = 0, subCount = 0;
+  (state.subscriptions || []).forEach(s => {
+    if (!s.active) return;
+    if (s.next_date && s.next_date.startsWith(monthPrefix)) {
+      const amt = s.currency === 'USD' ? Number(s.amount) * (window.USD_RATE || 12600) : Number(s.amount);
+      subSum += amt;
+      subCount++;
+    }
+  });
+
+  const total = creditSum + instSum + subSum;
+
+  box.innerHTML = `
+    <div class="msum-item credit">
+      <div class="msum-icon">🏦</div>
+      <div class="msum-info">
+        <div class="msum-label">Kreditlar</div>
+        <div class="msum-value">${fmt(creditSum)}</div>
+        <div class="msum-meta">${creditCount} ta to'lov</div>
+      </div>
+    </div>
+    <div class="msum-item installment">
+      <div class="msum-icon">🛒</div>
+      <div class="msum-info">
+        <div class="msum-label">Nasiyalar</div>
+        <div class="msum-value">${fmt(instSum)}</div>
+        <div class="msum-meta">${instCount} ta to'lov</div>
+      </div>
+    </div>
+    <div class="msum-item subscription">
+      <div class="msum-icon">📺</div>
+      <div class="msum-info">
+        <div class="msum-label">Obunalar</div>
+        <div class="msum-value">${fmt(subSum)}</div>
+        <div class="msum-meta">${subCount} ta obuna</div>
+      </div>
+    </div>
+    <div class="msum-item total">
+      <div class="msum-icon">💳</div>
+      <div class="msum-info">
+        <div class="msum-label">JAMI shu oyda</div>
+        <div class="msum-value">${fmt(total)}</div>
+        <div class="msum-meta">${creditCount + instCount + subCount} ta to'lov · ${UZ_MONTHS[now.getMonth()]} ${now.getFullYear()}</div>
+      </div>
+    </div>
+  `;
+}
+
 // ============ INSTALLMENTS (NASIYA) ============
 // Uses debts table with kind='installment'
 
@@ -1841,6 +1927,30 @@ function collectEvents() {
     }
   });
 
+  // OBUNALAR — har oyda/haftada/yilda qaytadi
+  (state.subscriptions || []).forEach(s => {
+    if (!s.active || !s.next_date) return;
+    const amt = s.currency === 'USD' ? Number(s.amount) * (window.USD_RATE || 12600) : Number(s.amount);
+    // Keyingi to'lovlar — 12 oy oldinga
+    let current = s.next_date;
+    for (let i = 0; i < 18; i++) {
+      push(current, {
+        type: 'subscription',
+        title: `${s.icon || '📺'} ${s.name}`,
+        note: s.card || '',
+        amount: amt,
+        id: s.id,
+        paid: false,
+        action: 'payAndRollSub',
+      });
+      const d = new Date(current);
+      if (s.cycle === 'yearly') d.setFullYear(d.getFullYear() + 1);
+      else if (s.cycle === 'weekly') d.setDate(d.getDate() + 7);
+      else d.setMonth(d.getMonth() + 1);
+      current = d.toISOString().split('T')[0];
+    }
+  });
+
   return map;
 }
 
@@ -1899,6 +2009,7 @@ function renderCalendar() {
     const evHtml = visible.map(e => {
       const label = e.type === 'credit' ? e.title :
                     e.type === 'installment' ? e.title :
+                    e.type === 'subscription' ? e.title :
                     e.type === 'i_owe' ? `⬇ ${e.title}` :
                     e.type === 'owed_to_me' ? `⬆ ${e.title}` : e.title;
       return `<div class="cal-event ${e.type} ${cell.dateStr < todayStr ? 'overdue' : ''}">${escapeHtml(label)}</div>`;
@@ -1951,15 +2062,19 @@ function renderCalendarStats(events) {
 
   const creditSum = monthEvents.filter(e => e.type === 'credit').reduce((s,e) => s + e.amount, 0);
   const instSum = monthEvents.filter(e => e.type === 'installment').reduce((s,e) => s + e.amount, 0);
+  const subSum = monthEvents.filter(e => e.type === 'subscription').reduce((s,e) => s + e.amount, 0);
   const iOweSum = monthEvents.filter(e => e.type === 'i_owe').reduce((s,e) => s + e.amount, 0);
   const owedToMeSum = monthEvents.filter(e => e.type === 'owed_to_me').reduce((s,e) => s + e.amount, 0);
   const overdueCount = monthEvents.filter(e => e.date < todayStr).length;
+  const totalOut = creditSum + instSum + subSum + iOweSum;
 
   box.innerHTML = `
     <div class="cal-stat"><div class="cal-stat-label">🏦 Kreditlar</div><div class="cal-stat-value">${fmt(creditSum)}</div><div class="cal-stat-meta">${monthEvents.filter(e=>e.type==='credit').length} ta to'lov</div></div>
-    <div class="cal-stat"><div class="cal-stat-label">📅 Muddatli to'lov</div><div class="cal-stat-value">${fmt(instSum)}</div><div class="cal-stat-meta">${monthEvents.filter(e=>e.type==='installment').length} ta</div></div>
+    <div class="cal-stat"><div class="cal-stat-label">🛒 Nasiyalar</div><div class="cal-stat-value">${fmt(instSum)}</div><div class="cal-stat-meta">${monthEvents.filter(e=>e.type==='installment').length} ta</div></div>
+    <div class="cal-stat"><div class="cal-stat-label">📺 Obunalar</div><div class="cal-stat-value">${fmt(subSum)}</div><div class="cal-stat-meta">${monthEvents.filter(e=>e.type==='subscription').length} ta</div></div>
     <div class="cal-stat"><div class="cal-stat-label">⬇️ Men qarzdorman</div><div class="cal-stat-value">${fmt(iOweSum)}</div><div class="cal-stat-meta">${monthEvents.filter(e=>e.type==='i_owe').length} ta</div></div>
     <div class="cal-stat"><div class="cal-stat-label">⬆️ Menga qarzdorlar</div><div class="cal-stat-value">${fmt(owedToMeSum)}</div><div class="cal-stat-meta">${monthEvents.filter(e=>e.type==='owed_to_me').length} ta</div></div>
+    <div class="cal-stat" style="border-color:var(--primary)"><div class="cal-stat-label" style="color:var(--primary)">💰 JAMI chiqim</div><div class="cal-stat-value">${fmt(totalOut)}</div><div class="cal-stat-meta">shu oyda</div></div>
     ${overdueCount > 0 ? `<div class="cal-stat" style="border-color:var(--danger)"><div class="cal-stat-label" style="color:var(--danger)">⚠️ Muddati o'tgan</div><div class="cal-stat-value" style="color:var(--danger)">${overdueCount}</div><div class="cal-stat-meta">shu oy ichida</div></div>` : ''}
   `;
 }
@@ -1985,11 +2100,13 @@ function renderCalendarDetail() {
 
   const html = events.map(e => {
     const icon = e.type === 'credit' ? '🏦' :
-                 e.type === 'installment' ? '📅' :
+                 e.type === 'installment' ? '🛒' :
+                 e.type === 'subscription' ? '📺' :
                  e.type === 'i_owe' ? '⬇️' :
                  e.type === 'owed_to_me' ? '⬆️' : '💳';
     const typeName = e.type === 'credit' ? 'Kredit to\'lovi' :
-                     e.type === 'installment' ? 'Muddatli to\'lov' :
+                     e.type === 'installment' ? 'Nasiya to\'lovi' :
+                     e.type === 'subscription' ? 'Obuna' :
                      e.type === 'i_owe' ? 'Men qarzdorman' :
                      e.type === 'owed_to_me' ? 'Menga qarzdor' : '';
     const monthInfo = e.monthIdx ? ` · <b>${e.monthIdx}/${e.totalMonths}</b>-oy` : '';

@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.28/dist/jspdf.plugin.autotable.min.js"></script>
-<link rel="stylesheet" href="styles.css?v=13">
+<link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
 
@@ -189,6 +189,12 @@
         </div>
       </div>
 
+      <!-- Oylik to'lovlar xulosasi -->
+      <div class="card">
+        <div class="card-header"><h3>📅 Shu oyda to'lashingiz kerak</h3></div>
+        <div class="month-summary" id="monthSummary"></div>
+      </div>
+
       <div class="dashboard-grid">
         <div class="card">
           <div class="card-header"><h3>Oxirgi 7 kunlik faoliyat</h3></div>
@@ -228,8 +234,9 @@
       </header>
 
       <div class="calendar-legend">
-        <div class="legend-item"><span class="dot credit"></span>Kredit to'lovi</div>
-        <div class="legend-item"><span class="dot installment"></span>Muddatli to'lov</div>
+        <div class="legend-item"><span class="dot credit"></span>Kredit</div>
+        <div class="legend-item"><span class="dot installment"></span>Nasiya</div>
+        <div class="legend-item"><span class="dot subscription"></span>Obuna</div>
         <div class="legend-item"><span class="dot i_owe"></span>Men qarzdor</div>
         <div class="legend-item"><span class="dot owed_to_me"></span>Menga qarzdor</div>
       </div>
@@ -907,10 +914,10 @@
 <div class="toast" id="toast"></div>
 <div class="loading" id="loading"><div class="spinner"></div></div>
 
-<script src="config.js?v=13"></script>
-<script src="db.js?v=13"></script>
-<script src="app.js?v=13"></script>
-<script src="features.js?v=13"></script>
+<script src="config.js?v=14"></script>
+<script src="db.js?v=14"></script>
+<script src="app.js?v=14"></script>
+<script src="features.js?v=14"></script>
 <script>
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
