@@ -507,6 +507,218 @@ body {
 .credit-detail-value { font-size: 13px; font-weight: 600; }
 .credit-actions { display: flex; gap: 8px; position: relative; }
 
+/* ============== CALENDAR ============== */
+.calendar-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 14px;
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.dot.credit { background: var(--warning); }
+.dot.installment { background: var(--primary); }
+.dot.i_owe { background: var(--danger); }
+.dot.owed_to_me { background: var(--success); }
+
+.cal-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.cal-stat {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+.cal-stat-label { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.cal-stat-value { font-size: 16px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+.cal-stat-meta { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+
+.calendar {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.cal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.cal-title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.cal-nav {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.cal-nav:hover { background: var(--bg-4); }
+
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: var(--border);
+  padding: 1px;
+}
+.cal-weekdays > div {
+  background: var(--bg-2);
+  padding: 10px 8px;
+  font-size: 11px;
+  text-align: center;
+  color: var(--text-2);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: var(--border);
+  padding: 1px;
+}
+.cal-cell {
+  background: var(--bg-2);
+  min-height: 92px;
+  padding: 6px 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: background 0.15s;
+  position: relative;
+}
+.cal-cell:hover { background: var(--bg-3); }
+.cal-cell.other-month { opacity: 0.35; }
+.cal-cell.today { background: var(--primary-soft); }
+.cal-cell.today .cal-day { background: var(--primary); color: white; }
+.cal-cell.selected { background: var(--primary-soft); box-shadow: inset 0 0 0 2px var(--primary); }
+.cal-cell.past { opacity: 0.6; }
+.cal-cell.has-overdue { background: rgba(244, 63, 94, 0.08); }
+
+.cal-day {
+  font-size: 13px;
+  font-weight: 600;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cal-events {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  overflow: hidden;
+}
+.cal-event {
+  font-size: 10.5px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-left: 3px solid;
+  background: var(--bg-3);
+  color: var(--text);
+  font-weight: 500;
+}
+.cal-event.credit { border-color: var(--warning); background: var(--warning-soft); color: var(--warning); }
+.cal-event.installment { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+.cal-event.i_owe { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+.cal-event.owed_to_me { border-color: var(--success); background: var(--success-soft); color: var(--success); }
+.cal-event.overdue { font-weight: 700; }
+
+.cal-more {
+  font-size: 10.5px;
+  color: var(--text-2);
+  padding: 1px 5px;
+  font-weight: 600;
+}
+
+.cal-event-count-bar {
+  display: flex;
+  gap: 3px;
+  margin-top: auto;
+}
+.cal-event-count-bar .count-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* Day detail panel */
+.cal-day-detail {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0;
+  overflow: hidden;
+}
+.cal-detail-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-3);
+}
+.cal-detail-title { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+.cal-detail-sub { font-size: 12px; color: var(--text-2); }
+.cal-detail-events { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.cal-detail-event {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-3);
+  border-radius: var(--radius-sm);
+  border-left: 4px solid;
+}
+.cal-detail-event.credit { border-color: var(--warning); }
+.cal-detail-event.installment { border-color: var(--primary); }
+.cal-detail-event.i_owe { border-color: var(--danger); }
+.cal-detail-event.owed_to_me { border-color: var(--success); }
+.cal-detail-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--bg-2); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+.cal-detail-info { flex: 1; min-width: 0; }
+.cal-detail-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+.cal-detail-note { font-size: 12px; color: var(--text-2); }
+.cal-detail-amount { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px; }
+
 /* ============== CREDIT SCHEDULE ============== */
 .next-payment {
   display: flex;
@@ -844,10 +1056,23 @@ form { padding: 24px; }
   .chart-wrap { height: 240px; padding: 12px; }
 }
 
+@media (max-width: 900px) {
+  .cal-cell { min-height: 64px; padding: 4px 4px; }
+  .cal-event { font-size: 9.5px; padding: 1px 4px; }
+  .cal-day { font-size: 12px; width: 20px; height: 20px; }
+}
+
 @media (max-width: 480px) {
   .main { padding: 16px 12px 100px; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .page-header { flex-direction: column; align-items: stretch; }
   .quick-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .quick-actions .btn { padding: 10px; }
+  .cal-cell { min-height: 52px; padding: 3px; }
+  .cal-event { display: none; }
+  .cal-event-count-bar { display: flex; justify-content: center; flex-wrap: wrap; }
+  .cal-weekdays > div { padding: 8px 2px; font-size: 10px; }
+  .cal-header { padding: 12px 14px; flex-wrap: wrap; }
+  .calendar-legend { gap: 10px; padding: 10px; }
+  .legend-item { font-size: 11px; }
 }

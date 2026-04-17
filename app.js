@@ -12,6 +12,8 @@ const state = {
   authMode: 'signin',
   debtFilter: 'all',
   scheduleOpen: {},
+  calMonth: (() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; })(),
+  calSelected: null,
 };
 
 const CAT_ICONS = {
@@ -265,6 +267,7 @@ async function processRecurring() {
 // ============ RENDER ALL ============
 function renderAll() {
   renderDashboard();
+  renderCalendar();
   renderCredits();
   renderDebts();
   renderIncome();
@@ -316,6 +319,7 @@ function switchTab(name) {
   if (name === 'analytics') renderAnalytics();
   if (name === 'debts') renderDebts();
   if (name === 'credits') renderCredits();
+  if (name === 'calendar') renderCalendar();
 }
 
 // ============ MODAL ============
@@ -1500,6 +1504,267 @@ function renderDebtCard(d) {
       </div>
     </div>`;
 }
+
+// ============ CALENDAR ============
+const UZ_MONTHS = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
+
+// Barcha to'lov/qarz eventlarini yig'ish: { 'YYYY-MM-DD': [events] }
+function collectEvents() {
+  const map = {};
+  const push = (dateStr, ev) => { (map[dateStr] = map[dateStr] || []).push(ev); };
+
+  // KREDITLAR — har bir to'lanmagan oy
+  state.credits.forEach(c => {
+    const totalMonths = Number(c.months);
+    const paidMonths = Number(c.paid_months || 0);
+    const startDate = c.start || c.start_date;
+    if (!startDate || !totalMonths) return;
+    for (let i = 1; i <= totalMonths; i++) {
+      const date = withPaymentDay(addMonths(startDate, i), c.payment_day);
+      push(date, {
+        type: 'credit',
+        title: c.bank,
+        note: c.purpose || '',
+        amount: Number(c.monthly),
+        monthIdx: i,
+        totalMonths,
+        paid: i <= paidMonths,
+        id: c.id,
+        action: 'markCreditMonthPaid',
+      });
+    }
+  });
+
+  // QARZLAR
+  state.debts.forEach(d => {
+    if (d.kind === 'installment') {
+      const totalMonths = Number(d.months || 0);
+      const paidMonths = Number(d.paid_months || 0);
+      const base = d.due_date || d.created_at?.split('T')[0] || today();
+      for (let i = 1; i <= totalMonths; i++) {
+        const date = addMonths(base, i - 1);
+        push(date, {
+          type: 'installment',
+          title: d.title,
+          note: d.person || '',
+          amount: Number(d.monthly || 0),
+          monthIdx: i,
+          totalMonths,
+          paid: i <= paidMonths,
+          id: d.id,
+          action: 'markDebtMonthPaid',
+        });
+      }
+    } else if (d.due_date) {
+      const remaining = Math.max(0, Number(d.amount) - Number(d.paid || 0));
+      if (remaining > 0) {
+        push(d.due_date, {
+          type: d.kind,  // 'i_owe' | 'owed_to_me'
+          title: d.title,
+          note: d.person || '',
+          amount: remaining,
+          id: d.id,
+          paid: false,
+          action: 'markDebtPaid',
+        });
+      }
+    }
+  });
+
+  return map;
+}
+
+function renderCalendar() {
+  const grid = document.getElementById('calGrid');
+  if (!grid) return;
+  const { y, m } = state.calMonth;
+  const title = document.getElementById('calTitle');
+  if (title) title.textContent = `${UZ_MONTHS[m]} ${y}`;
+
+  const events = collectEvents();
+  const firstDay = new Date(y, m, 1);
+  const lastDay = new Date(y, m + 1, 0);
+  // Dushanbadan boshlanishi uchun offset
+  let offset = firstDay.getDay() - 1;
+  if (offset < 0) offset = 6; // yakshanba
+  const daysInMonth = lastDay.getDate();
+  const prevMonthDays = new Date(y, m, 0).getDate();
+  const todayStr = today();
+
+  const cells = [];
+  // Oldingi oy bo'sh kunlar
+  for (let i = offset - 1; i >= 0; i--) {
+    const day = prevMonthDays - i;
+    const prevM = m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 };
+    const dateStr = `${prevM.y}-${String(prevM.m + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    cells.push({ day, dateStr, otherMonth: true });
+  }
+  // Joriy oy
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${y}-${String(m + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    cells.push({ day, dateStr, otherMonth: false });
+  }
+  // Keyingi oy to'ldirish (42 ta cell uchun)
+  const totalCells = cells.length <= 35 ? 35 : 42;
+  while (cells.length < totalCells) {
+    const idx = cells.length - offset - daysInMonth + 1;
+    const nextM = m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 };
+    const dateStr = `${nextM.y}-${String(nextM.m + 1).padStart(2,'0')}-${String(idx).padStart(2,'0')}`;
+    cells.push({ day: idx, dateStr, otherMonth: true });
+  }
+
+  grid.innerHTML = cells.map(cell => {
+    const dayEvents = (events[cell.dateStr] || []).filter(e => !e.paid);
+    const classes = ['cal-cell'];
+    if (cell.otherMonth) classes.push('other-month');
+    if (cell.dateStr === todayStr) classes.push('today');
+    if (cell.dateStr < todayStr && !cell.otherMonth) classes.push('past');
+    if (state.calSelected === cell.dateStr) classes.push('selected');
+    const hasOverdue = dayEvents.length && cell.dateStr < todayStr;
+    if (hasOverdue) classes.push('has-overdue');
+
+    const visible = dayEvents.slice(0, 2);
+    const hidden = dayEvents.length - visible.length;
+
+    const evHtml = visible.map(e => {
+      const label = e.type === 'credit' ? e.title :
+                    e.type === 'installment' ? e.title :
+                    e.type === 'i_owe' ? `⬇ ${e.title}` :
+                    e.type === 'owed_to_me' ? `⬆ ${e.title}` : e.title;
+      return `<div class="cal-event ${e.type} ${cell.dateStr < todayStr ? 'overdue' : ''}">${escapeHtml(label)}</div>`;
+    }).join('');
+
+    const moreHtml = hidden > 0 ? `<div class="cal-more">+${hidden} ta</div>` : '';
+
+    // Mobile'da dotlar
+    const dots = dayEvents.slice(0, 6).map(e =>
+      `<span class="count-dot dot ${e.type}"></span>`
+    ).join('');
+    const dotsBar = dayEvents.length ? `<div class="cal-event-count-bar">${dots}</div>` : '';
+
+    return `
+      <div class="${classes.join(' ')}" data-date="${cell.dateStr}">
+        <div class="cal-day">${cell.day}</div>
+        <div class="cal-events">${evHtml}${moreHtml}</div>
+        ${dotsBar}
+      </div>`;
+  }).join('');
+
+  // Click handlerlar
+  grid.querySelectorAll('.cal-cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      state.calSelected = cell.dataset.date;
+      renderCalendar();
+      renderCalendarDetail();
+    });
+  });
+
+  renderCalendarStats(events);
+  if (!state.calSelected) state.calSelected = todayStr;
+  renderCalendarDetail();
+}
+
+function renderCalendarStats(events) {
+  const box = document.getElementById('calStats');
+  if (!box) return;
+  const { y, m } = state.calMonth;
+  const monthPrefix = `${y}-${String(m + 1).padStart(2,'0')}`;
+  const todayStr = today();
+
+  // Shu oydagi barcha to'lanmagan eventlar
+  const monthEvents = [];
+  Object.keys(events).forEach(d => {
+    if (d.startsWith(monthPrefix)) {
+      events[d].forEach(e => { if (!e.paid) monthEvents.push({ ...e, date: d }); });
+    }
+  });
+
+  const creditSum = monthEvents.filter(e => e.type === 'credit').reduce((s,e) => s + e.amount, 0);
+  const instSum = monthEvents.filter(e => e.type === 'installment').reduce((s,e) => s + e.amount, 0);
+  const iOweSum = monthEvents.filter(e => e.type === 'i_owe').reduce((s,e) => s + e.amount, 0);
+  const owedToMeSum = monthEvents.filter(e => e.type === 'owed_to_me').reduce((s,e) => s + e.amount, 0);
+  const overdueCount = monthEvents.filter(e => e.date < todayStr).length;
+
+  box.innerHTML = `
+    <div class="cal-stat"><div class="cal-stat-label">🏦 Kreditlar</div><div class="cal-stat-value">${fmt(creditSum)}</div><div class="cal-stat-meta">${monthEvents.filter(e=>e.type==='credit').length} ta to'lov</div></div>
+    <div class="cal-stat"><div class="cal-stat-label">📅 Muddatli to'lov</div><div class="cal-stat-value">${fmt(instSum)}</div><div class="cal-stat-meta">${monthEvents.filter(e=>e.type==='installment').length} ta</div></div>
+    <div class="cal-stat"><div class="cal-stat-label">⬇️ Men qarzdorman</div><div class="cal-stat-value">${fmt(iOweSum)}</div><div class="cal-stat-meta">${monthEvents.filter(e=>e.type==='i_owe').length} ta</div></div>
+    <div class="cal-stat"><div class="cal-stat-label">⬆️ Menga qarzdorlar</div><div class="cal-stat-value">${fmt(owedToMeSum)}</div><div class="cal-stat-meta">${monthEvents.filter(e=>e.type==='owed_to_me').length} ta</div></div>
+    ${overdueCount > 0 ? `<div class="cal-stat" style="border-color:var(--danger)"><div class="cal-stat-label" style="color:var(--danger)">⚠️ Muddati o'tgan</div><div class="cal-stat-value" style="color:var(--danger)">${overdueCount}</div><div class="cal-stat-meta">shu oy ichida</div></div>` : ''}
+  `;
+}
+
+function renderCalendarDetail() {
+  const box = document.getElementById('calDayDetail');
+  if (!box) return;
+  const date = state.calSelected || today();
+  const events = collectEvents()[date] || [];
+  const isToday = date === today();
+  const isPast = date < today();
+
+  const header = `
+    <div class="cal-detail-header">
+      <div class="cal-detail-title">${fmtDateLong(date)} ${isToday ? '<span style="color:var(--primary);font-size:13px">(Bugun)</span>' : ''}</div>
+      <div class="cal-detail-sub">${events.length ? events.length + ' ta hodisa' : 'Bu kunda hodisa yo\'q'} ${isPast && events.some(e=>!e.paid) ? '· <span style="color:var(--danger)">muddati o\'tgan</span>' : ''}</div>
+    </div>`;
+
+  if (!events.length) {
+    box.innerHTML = header + `<div class="empty"><div class="empty-icon">📅</div><div>Bu kunda to'lov yoki muddat yo'q</div></div>`;
+    return;
+  }
+
+  const html = events.map(e => {
+    const icon = e.type === 'credit' ? '🏦' :
+                 e.type === 'installment' ? '📅' :
+                 e.type === 'i_owe' ? '⬇️' :
+                 e.type === 'owed_to_me' ? '⬆️' : '💳';
+    const typeName = e.type === 'credit' ? 'Kredit to\'lovi' :
+                     e.type === 'installment' ? 'Muddatli to\'lov' :
+                     e.type === 'i_owe' ? 'Men qarzdorman' :
+                     e.type === 'owed_to_me' ? 'Menga qarzdor' : '';
+    const monthInfo = e.monthIdx ? ` · <b>${e.monthIdx}/${e.totalMonths}</b>-oy` : '';
+    const status = e.paid ? '<span style="color:var(--success);font-size:12px">✓ To\'langan</span>' :
+                   `<button class="btn-pay" onclick="${e.action}('${e.id}')">✓ To'ladim</button>`;
+
+    return `
+      <div class="cal-detail-event ${e.type}">
+        <div class="cal-detail-icon">${icon}</div>
+        <div class="cal-detail-info">
+          <div class="cal-detail-name">${escapeHtml(e.title)}${monthInfo}</div>
+          <div class="cal-detail-note">${typeName}${e.note ? ' · ' + escapeHtml(e.note) : ''}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="cal-detail-amount">${fmt(e.amount)}</div>
+          <div style="margin-top:6px">${status}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  box.innerHTML = header + `<div class="cal-detail-events">${html}</div>`;
+}
+
+// Calendar navigatsiya tugmalari
+document.addEventListener('DOMContentLoaded', () => {
+  const prev = document.getElementById('calPrev');
+  const next = document.getElementById('calNext');
+  const today_ = document.getElementById('calToday');
+  if (prev) prev.addEventListener('click', () => {
+    const { y, m } = state.calMonth;
+    state.calMonth = m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 };
+    renderCalendar();
+  });
+  if (next) next.addEventListener('click', () => {
+    const { y, m } = state.calMonth;
+    state.calMonth = m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 };
+    renderCalendar();
+  });
+  if (today_) today_.addEventListener('click', () => {
+    const d = new Date();
+    state.calMonth = { y: d.getFullYear(), m: d.getMonth() };
+    state.calSelected = today();
+    renderCalendar();
+  });
+});
 
 // ============ START ============
 init();

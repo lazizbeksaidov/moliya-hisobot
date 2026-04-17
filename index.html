@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
 
@@ -107,6 +107,7 @@
     </div>
     <nav class="nav">
       <button class="nav-item active" data-tab="dashboard"><span class="nav-icon">📊</span>Bosh sahifa</button>
+      <button class="nav-item" data-tab="calendar"><span class="nav-icon">📆</span>Kalendar</button>
       <button class="nav-item" data-tab="credits"><span class="nav-icon">🏦</span>Kreditlar</button>
       <button class="nav-item" data-tab="debts"><span class="nav-icon">💳</span>Qarzlar</button>
       <button class="nav-item" data-tab="income"><span class="nav-icon">💰</span>Daromad</button>
@@ -199,6 +200,40 @@
           <div class="budget-mini" id="budgetMini"></div>
         </div>
       </div>
+    </section>
+
+    <!-- CALENDAR -->
+    <section class="tab" id="tab-calendar">
+      <header class="page-header">
+        <div>
+          <h1>Kalendar</h1>
+          <p class="subtitle">To'lov sanalari va qarz muddatlarini bir joyda ko'ring</p>
+        </div>
+      </header>
+
+      <div class="calendar-legend">
+        <div class="legend-item"><span class="dot credit"></span>Kredit to'lovi</div>
+        <div class="legend-item"><span class="dot installment"></span>Muddatli to'lov</div>
+        <div class="legend-item"><span class="dot i_owe"></span>Men qarzdor</div>
+        <div class="legend-item"><span class="dot owed_to_me"></span>Menga qarzdor</div>
+      </div>
+
+      <div class="cal-stats" id="calStats"></div>
+
+      <div class="calendar">
+        <div class="cal-header">
+          <button class="cal-nav" id="calPrev">◀</button>
+          <div class="cal-title" id="calTitle">—</div>
+          <button class="cal-nav" id="calToday">Bugun</button>
+          <button class="cal-nav" id="calNext">▶</button>
+        </div>
+        <div class="cal-weekdays">
+          <div>Du</div><div>Se</div><div>Ch</div><div>Pa</div><div>Ju</div><div>Sh</div><div>Ya</div>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+
+      <div class="cal-day-detail" id="calDayDetail"></div>
     </section>
 
     <!-- CREDITS -->
@@ -405,10 +440,10 @@
   <!-- MOBILE BOTTOM NAV -->
   <nav class="mobile-nav" id="mobileNav">
     <button class="mnav active" data-tab="dashboard"><span>📊</span>Bosh</button>
+    <button class="mnav" data-tab="calendar"><span>📆</span>Kalendar</button>
     <button class="mnav" data-tab="credits"><span>🏦</span>Kredit</button>
     <button class="mnav" data-tab="debts"><span>💳</span>Qarz</button>
     <button class="mnav" data-tab="expenses"><span>💸</span>Xarajat</button>
-    <button class="mnav" data-tab="analytics"><span>📈</span>Tahlil</button>
   </nav>
 </div>
 
@@ -631,9 +666,9 @@
 <div class="toast" id="toast"></div>
 <div class="loading" id="loading"><div class="spinner"></div></div>
 
-<script src="config.js?v=8"></script>
-<script src="db.js?v=8"></script>
-<script src="app.js?v=8"></script>
+<script src="config.js?v=9"></script>
+<script src="db.js?v=9"></script>
+<script src="app.js?v=9"></script>
 <script>
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
