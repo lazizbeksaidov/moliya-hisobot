@@ -337,6 +337,7 @@ function openModal(id) {
     document.getElementById('creditRate').value = 0;
     document.getElementById('creditMonths').value = 12;
     document.getElementById('creditPaidMonths').value = 0;
+    document.getElementById('creditPaymentDay').value = '';
     document.getElementById('creditModalTitle').textContent = 'Yangi kredit';
   }
   if (id === 'debtModal') {
@@ -365,6 +366,7 @@ async function saveCredit(e) {
   const id = document.getElementById('creditId').value;
   const monthly = parseFloat(document.getElementById('creditMonthly').value);
   const paidMonths = parseInt(document.getElementById('creditPaidMonths').value) || 0;
+  const payDay = parseInt(document.getElementById('creditPaymentDay').value);
   const data = {
     bank: document.getElementById('creditBank').value.trim(),
     purpose: document.getElementById('creditPurpose').value.trim(),
@@ -375,6 +377,7 @@ async function saveCredit(e) {
     start: document.getElementById('creditStart').value,
     paid_months: paidMonths,
     paid: paidMonths * monthly,
+    payment_day: (payDay && payDay >= 1 && payDay <= 31) ? payDay : null,
   };
   setLoading(true);
   try {
@@ -406,6 +409,7 @@ function editCredit(id) {
   document.getElementById('creditMonthly').value = c.monthly;
   document.getElementById('creditStart').value = c.start || c.start_date;
   document.getElementById('creditPaidMonths').value = c.paid_months || Math.round((c.paid || 0) / (c.monthly || 1));
+  document.getElementById('creditPaymentDay').value = c.payment_day || '';
   document.getElementById('creditModalTitle').textContent = 'Kreditni tahrirlash';
   document.getElementById('creditModal').classList.add('active');
 }
@@ -488,6 +492,15 @@ function addMonths(dateStr, n) {
   return d.toISOString().split('T')[0];
 }
 
+// payment_day berilgan bo'lsa shu kunga to'g'rilaydi (oy oxiridan oshmasdan)
+function withPaymentDay(dateStr, paymentDay) {
+  if (!paymentDay) return dateStr;
+  const d = new Date(dateStr);
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(paymentDay, lastDay));
+  return d.toISOString().split('T')[0];
+}
+
 function renderCredits() {
   const list = document.getElementById('creditsList');
   if (!state.credits.length) {
@@ -514,7 +527,7 @@ function renderCreditCard(c) {
 
   let nextPaymentHtml = '';
   if (paidMonths < totalMonths) {
-    const nextDate = addMonths(startDate, paidMonths + 1);
+    const nextDate = withPaymentDay(addMonths(startDate, paidMonths + 1), c.payment_day);
     const today_d = today();
     const dueClass = nextDate < today_d ? 'overdue' : (nextDate === today_d ? 'due' : '');
     const dueLabel = nextDate < today_d ? '⚠️ Muddat o\'tdi' : nextDate === today_d ? '🔔 Bugun to\'lash' : 'Keyingi to\'lov';
@@ -542,7 +555,7 @@ function renderCreditCard(c) {
   if (isOpen) {
     const rows = [];
     for (let i = 1; i <= totalMonths; i++) {
-      const date = addMonths(startDate, i);
+      const date = withPaymentDay(addMonths(startDate, i), c.payment_day);
       const isPaid = i <= paidMonths;
       rows.push(`
         <div class="schedule-row ${isPaid ? 'paid' : ''}">
@@ -581,6 +594,7 @@ function renderCreditCard(c) {
         <div><div class="credit-detail-label">Foiz</div><div class="credit-detail-value">${c.rate}%</div></div>
         <div><div class="credit-detail-label">Muddat</div><div class="credit-detail-value">${totalMonths} oy</div></div>
         <div><div class="credit-detail-label">Boshlandi</div><div class="credit-detail-value">${fmtDate(startDate)}</div></div>
+        ${c.payment_day ? `<div style="grid-column:1/-1"><div class="credit-detail-label">To'lov kuni</div><div class="credit-detail-value">Har oyning ${c.payment_day}-sanasi</div></div>` : ''}
       </div>
       <div class="credit-actions">
         <button class="btn btn-secondary" style="flex:1" onclick="payCredit('${c.id}')">💵 Boshqa miqdorda to'lash</button>
