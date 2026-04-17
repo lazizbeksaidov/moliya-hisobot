@@ -507,6 +507,100 @@ body {
 .credit-detail-value { font-size: 13px; font-weight: 600; }
 .credit-actions { display: flex; gap: 8px; position: relative; }
 
+/* ============== CREDIT SCHEDULE ============== */
+.next-payment {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-3);
+  border-radius: var(--radius-sm);
+  margin-bottom: 14px;
+  position: relative;
+}
+.next-payment.due { background: var(--warning-soft); border: 1px solid var(--warning); }
+.next-payment.overdue { background: var(--danger-soft); border: 1px solid var(--danger); }
+.next-payment.done { background: var(--success-soft); border: 1px solid var(--success); }
+.next-payment-info { flex: 1; }
+.next-payment-label { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.next-payment-date { font-weight: 600; font-size: 13px; }
+.next-payment-amount { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 16px; }
+.btn-pay {
+  padding: 8px 14px;
+  background: var(--success);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-pay:hover { opacity: 0.9; }
+.btn-pay.done { background: var(--text-3); cursor: default; }
+
+.schedule-toggle {
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  margin-bottom: 10px;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.schedule-toggle:hover { background: var(--bg-3); color: var(--text); }
+
+.schedule {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s;
+  margin-bottom: 10px;
+}
+.schedule.open { max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+
+.schedule-row {
+  display: grid;
+  grid-template-columns: 36px 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.schedule-row:last-child { border-bottom: none; }
+.schedule-row.paid { opacity: 0.5; }
+.schedule-month { color: var(--text-3); font-weight: 600; }
+.schedule-date { color: var(--text-2); }
+.schedule-amount { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+.schedule-status { font-size: 14px; }
+
+/* Debt direction badges */
+.debt-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.debt-badge.i_owe { background: var(--danger-soft); color: var(--danger); }
+.debt-badge.owed_to_me { background: var(--success-soft); color: var(--success); }
+.debt-badge.installment { background: var(--warning-soft); color: var(--warning); }
+
+.due-date-warn { color: var(--warning); font-weight: 600; }
+.due-date-overdue { color: var(--danger); font-weight: 600; }
+
 /* ============== BUDGET ============== */
 .budget-grid {
   display: grid;

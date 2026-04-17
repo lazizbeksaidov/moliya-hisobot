@@ -7,8 +7,11 @@ const state = {
   incomes: [],
   expenses: [],
   budgets: [],
+  debts: [],
   period: 'day',
   authMode: 'signin',
+  debtFilter: 'all',
+  scheduleOpen: {},
 };
 
 const CAT_ICONS = {
@@ -192,16 +195,18 @@ function saveSetup() {
 // ============ DATA LOAD ============
 async function loadAll() {
   try {
-    const [credits, incomes, expenses, budgets] = await Promise.all([
+    const [credits, incomes, expenses, budgets, debts] = await Promise.all([
       window.DB.list('credits'),
       window.DB.list('incomes'),
       window.DB.list('expenses'),
       window.DB.list('budgets'),
+      window.DB.list('debts').catch(() => []),
     ]);
     state.credits = credits;
     state.incomes = incomes;
     state.expenses = expenses;
     state.budgets = budgets;
+    state.debts = debts;
     await window.DB.loadProfile();
 
     // Process recurring
@@ -261,6 +266,7 @@ async function processRecurring() {
 function renderAll() {
   renderDashboard();
   renderCredits();
+  renderDebts();
   renderIncome();
   renderExpenses();
   renderBudget();
@@ -308,6 +314,8 @@ function switchTab(name) {
   if (name === 'dashboard') renderDashboard();
   if (name === 'budget') renderBudget();
   if (name === 'analytics') renderAnalytics();
+  if (name === 'debts') renderDebts();
+  if (name === 'credits') renderCredits();
 }
 
 // ============ MODAL ============
@@ -328,8 +336,15 @@ function openModal(id) {
     document.getElementById('creditStart').value = today();
     document.getElementById('creditRate').value = 0;
     document.getElementById('creditMonths').value = 12;
-    document.getElementById('creditPaid').value = 0;
+    document.getElementById('creditPaidMonths').value = 0;
     document.getElementById('creditModalTitle').textContent = 'Yangi kredit';
+  }
+  if (id === 'debtModal') {
+    document.getElementById('debtForm').reset();
+    document.getElementById('debtId').value = '';
+    document.getElementById('debtPaid').value = 0;
+    document.getElementById('debtPaidMonths').value = 0;
+    toggleDebtFields();
   }
   if (id === 'budgetModal') {
     document.getElementById('budgetForm').reset();
@@ -348,15 +363,18 @@ document.querySelectorAll('.modal').forEach(m => {
 async function saveCredit(e) {
   e.preventDefault();
   const id = document.getElementById('creditId').value;
+  const monthly = parseFloat(document.getElementById('creditMonthly').value);
+  const paidMonths = parseInt(document.getElementById('creditPaidMonths').value) || 0;
   const data = {
     bank: document.getElementById('creditBank').value.trim(),
     purpose: document.getElementById('creditPurpose').value.trim(),
     amount: parseFloat(document.getElementById('creditAmount').value),
     rate: parseFloat(document.getElementById('creditRate').value) || 0,
     months: parseInt(document.getElementById('creditMonths').value) || 12,
-    monthly: parseFloat(document.getElementById('creditMonthly').value),
+    monthly: monthly,
     start: document.getElementById('creditStart').value,
-    paid: parseFloat(document.getElementById('creditPaid').value) || 0,
+    paid_months: paidMonths,
+    paid: paidMonths * monthly,
   };
   setLoading(true);
   try {
@@ -387,7 +405,7 @@ function editCredit(id) {
   document.getElementById('creditMonths').value = c.months;
   document.getElementById('creditMonthly').value = c.monthly;
   document.getElementById('creditStart').value = c.start || c.start_date;
-  document.getElementById('creditPaid').value = c.paid || 0;
+  document.getElementById('creditPaidMonths').value = c.paid_months || Math.round((c.paid || 0) / (c.monthly || 1));
   document.getElementById('creditModalTitle').textContent = 'Kreditni tahrirlash';
   document.getElementById('creditModal').classList.add('active');
 }
@@ -405,6 +423,7 @@ async function deleteCredit(id) {
   finally { setLoading(false); }
 }
 
+// Manual to'lov (custom miqdor bilan)
 async function payCredit(id) {
   const c = state.credits.find(x => x.id === id);
   if (!c) return;
@@ -414,7 +433,9 @@ async function payCredit(id) {
   if (isNaN(sum) || sum <= 0) return;
   setLoading(true);
   try {
-    const updated = await window.DB.update('credits', id, { paid: (c.paid || 0) + sum });
+    const newPaid = (c.paid || 0) + sum;
+    const newPaidMonths = Math.floor(newPaid / Number(c.monthly || 1));
+    const updated = await window.DB.update('credits', id, { paid: newPaid, paid_months: newPaidMonths });
     const i = state.credits.findIndex(x => x.id === id);
     if (i >= 0) state.credits[i] = updated;
     const expense = await window.DB.insert('expenses', {
@@ -429,42 +450,50 @@ async function payCredit(id) {
   finally { setLoading(false); }
 }
 
+// 1 oy to'lovini ✓ qilish
+async function markCreditMonthPaid(id) {
+  const c = state.credits.find(x => x.id === id);
+  if (!c) return;
+  const currentPaidMonths = c.paid_months || 0;
+  if (currentPaidMonths >= c.months) { toast('Kredit allaqachon to\'liq to\'langan'); return; }
+  setLoading(true);
+  try {
+    const newPaidMonths = currentPaidMonths + 1;
+    const newPaid = newPaidMonths * Number(c.monthly);
+    const updated = await window.DB.update('credits', id, { paid: newPaid, paid_months: newPaidMonths });
+    const i = state.credits.findIndex(x => x.id === id);
+    if (i >= 0) state.credits[i] = updated;
+    const expense = await window.DB.insert('expenses', {
+      category: 'Kredit', amount: Number(c.monthly), date: today(),
+      note: `${c.bank} ${newPaidMonths}-oy to'lovi`, recurring: null
+    });
+    state.expenses.push(expense);
+    toast(`✓ ${newPaidMonths}-oy to'lovi belgilandi`);
+    renderCredits();
+    renderDashboard();
+    renderExpenses();
+  } catch (err) { toast(err.message, 'error'); }
+  finally { setLoading(false); }
+}
+
+function toggleSchedule(id) {
+  state.scheduleOpen[id] = !state.scheduleOpen[id];
+  renderCredits();
+}
+
+// Boshlanish sanasidan N oy keyingi sanani hisoblash
+function addMonths(dateStr, n) {
+  const d = new Date(dateStr);
+  d.setMonth(d.getMonth() + n);
+  return d.toISOString().split('T')[0];
+}
+
 function renderCredits() {
   const list = document.getElementById('creditsList');
   if (!state.credits.length) {
     list.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">🏦</div><div>Hozircha kredit qo'shilmagan</div></div>`;
   } else {
-    list.innerHTML = state.credits.map(c => {
-      const remaining = Math.max(0, c.amount - (c.paid || 0));
-      const progress = c.amount > 0 ? ((c.paid || 0) / c.amount) * 100 : 0;
-      return `
-        <div class="credit-card">
-          <div class="credit-top">
-            <div>
-              <div class="credit-bank">🏦 ${escapeHtml(c.bank)}</div>
-              ${c.purpose ? `<div class="credit-purpose">${escapeHtml(c.purpose)}</div>` : ''}
-            </div>
-          </div>
-          <div class="credit-label">Qoldiq qarz</div>
-          <div class="credit-amount-main">${fmt(remaining)}</div>
-          <div class="progress"><div class="progress-fill" style="width:${progress}%"></div></div>
-          <div class="credit-progress-info">
-            <span>${progress.toFixed(1)}% to'langan</span>
-            <span>${fmt(c.paid || 0)} / ${fmt(c.amount)}</span>
-          </div>
-          <div class="credit-details">
-            <div><div class="credit-detail-label">Oylik</div><div class="credit-detail-value">${fmt(c.monthly)}</div></div>
-            <div><div class="credit-detail-label">Foiz</div><div class="credit-detail-value">${c.rate}%</div></div>
-            <div><div class="credit-detail-label">Muddat</div><div class="credit-detail-value">${c.months} oy</div></div>
-            <div><div class="credit-detail-label">Boshlandi</div><div class="credit-detail-value">${fmtDate(c.start || c.start_date)}</div></div>
-          </div>
-          <div class="credit-actions">
-            <button class="btn btn-primary" style="flex:1" onclick="payCredit('${c.id}')">💵 To'lov</button>
-            <button class="icon-btn" onclick="editCredit('${c.id}')">✏️</button>
-            <button class="icon-btn danger" onclick="deleteCredit('${c.id}')">🗑️</button>
-          </div>
-        </div>`;
-    }).join('');
+    list.innerHTML = state.credits.map(c => renderCreditCard(c)).join('');
   }
   const totalRemaining = state.credits.reduce((s,c) => s + Math.max(0, c.amount - (c.paid||0)), 0);
   const monthlySum = state.credits.reduce((s,c) => s + (Math.max(0, c.amount - (c.paid||0)) > 0 ? Number(c.monthly) : 0), 0);
@@ -472,6 +501,93 @@ function renderCredits() {
   document.getElementById('creditTotalRemaining').textContent = fmt(totalRemaining);
   document.getElementById('creditMonthlySum').textContent = fmt(monthlySum);
   document.getElementById('creditTotalPaid').textContent = fmt(paidSum);
+}
+
+function renderCreditCard(c) {
+  const monthly = Number(c.monthly);
+  const totalMonths = Number(c.months);
+  const paidMonths = Number(c.paid_months || Math.round((c.paid || 0) / (monthly || 1)));
+  const remainingMonths = Math.max(0, totalMonths - paidMonths);
+  const remaining = Math.max(0, c.amount - (c.paid || 0));
+  const progress = totalMonths > 0 ? (paidMonths / totalMonths) * 100 : 0;
+  const startDate = c.start || c.start_date;
+
+  let nextPaymentHtml = '';
+  if (paidMonths < totalMonths) {
+    const nextDate = addMonths(startDate, paidMonths + 1);
+    const today_d = today();
+    const dueClass = nextDate < today_d ? 'overdue' : (nextDate === today_d ? 'due' : '');
+    const dueLabel = nextDate < today_d ? '⚠️ Muddat o\'tdi' : nextDate === today_d ? '🔔 Bugun to\'lash' : 'Keyingi to\'lov';
+    nextPaymentHtml = `
+      <div class="next-payment ${dueClass}">
+        <div class="next-payment-info">
+          <div class="next-payment-label">${dueLabel} · ${paidMonths + 1}/${totalMonths}-oy</div>
+          <div class="next-payment-date">${fmtDate(nextDate)}</div>
+        </div>
+        <div class="next-payment-amount">${fmt(monthly)}</div>
+        <button class="btn-pay" onclick="markCreditMonthPaid('${c.id}')">✓ To'ladim</button>
+      </div>`;
+  } else {
+    nextPaymentHtml = `<div class="next-payment done">
+      <div class="next-payment-info">
+        <div class="next-payment-label">🎉 Tabriklayman!</div>
+        <div class="next-payment-date">Kredit to'liq to'landi</div>
+      </div>
+    </div>`;
+  }
+
+  // Schedule rows
+  const isOpen = state.scheduleOpen[c.id];
+  let scheduleHtml = '';
+  if (isOpen) {
+    const rows = [];
+    for (let i = 1; i <= totalMonths; i++) {
+      const date = addMonths(startDate, i);
+      const isPaid = i <= paidMonths;
+      rows.push(`
+        <div class="schedule-row ${isPaid ? 'paid' : ''}">
+          <div class="schedule-month">${i}-oy</div>
+          <div class="schedule-date">${fmtDate(date)}</div>
+          <div class="schedule-amount">${fmt(monthly)}</div>
+          <div class="schedule-status">${isPaid ? '✅' : '⬜'}</div>
+        </div>`);
+    }
+    scheduleHtml = `<div class="schedule open">${rows.join('')}</div>`;
+  }
+
+  return `
+    <div class="credit-card">
+      <div class="credit-top">
+        <div>
+          <div class="credit-bank">🏦 ${escapeHtml(c.bank)}</div>
+          ${c.purpose ? `<div class="credit-purpose">${escapeHtml(c.purpose)}</div>` : ''}
+        </div>
+      </div>
+      <div class="credit-label">Qoldiq qarz · ${remainingMonths} oy qoldi</div>
+      <div class="credit-amount-main">${fmt(remaining)}</div>
+      <div class="progress"><div class="progress-fill" style="width:${progress}%"></div></div>
+      <div class="credit-progress-info">
+        <span><b>${paidMonths}/${totalMonths}</b> oy to'langan (${progress.toFixed(0)}%)</span>
+        <span>${fmt(c.paid || 0)} / ${fmt(c.amount)}</span>
+      </div>
+
+      ${nextPaymentHtml}
+
+      <button class="schedule-toggle" onclick="toggleSchedule('${c.id}')">${isOpen ? '▲ Jadvalni yashirish' : '▼ To\'lov jadvalini ko\'rish'}</button>
+      ${scheduleHtml}
+
+      <div class="credit-details">
+        <div><div class="credit-detail-label">Oylik</div><div class="credit-detail-value">${fmt(monthly)}</div></div>
+        <div><div class="credit-detail-label">Foiz</div><div class="credit-detail-value">${c.rate}%</div></div>
+        <div><div class="credit-detail-label">Muddat</div><div class="credit-detail-value">${totalMonths} oy</div></div>
+        <div><div class="credit-detail-label">Boshlandi</div><div class="credit-detail-value">${fmtDate(startDate)}</div></div>
+      </div>
+      <div class="credit-actions">
+        <button class="btn btn-secondary" style="flex:1" onclick="payCredit('${c.id}')">💵 Boshqa miqdorda to'lash</button>
+        <button class="icon-btn" onclick="editCredit('${c.id}')">✏️</button>
+        <button class="icon-btn danger" onclick="deleteCredit('${c.id}')">🗑️</button>
+      </div>
+    </div>`;
 }
 
 // ============ INCOME ============
@@ -1130,6 +1246,224 @@ function chartOpts() {
       }
     }
   };
+}
+
+// ============ DEBTS / INSTALLMENTS ============
+function toggleDebtFields() {
+  const kind = document.getElementById('debtKind').value;
+  const isInst = kind === 'installment';
+  document.getElementById('debtInstallmentBlock').style.display = isInst ? 'block' : 'none';
+  document.getElementById('debtSimpleBlock').style.display = isInst ? 'none' : 'block';
+  // For installments, monthly + months become required
+  document.getElementById('debtMonthly').required = isInst;
+  document.getElementById('debtMonths').required = isInst;
+}
+
+document.querySelectorAll('[data-debt-filter]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-debt-filter]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.debtFilter = btn.dataset.debtFilter;
+    renderDebts();
+  });
+});
+
+async function saveDebt(e) {
+  e.preventDefault();
+  const id = document.getElementById('debtId').value;
+  const kind = document.getElementById('debtKind').value;
+  const isInst = kind === 'installment';
+  const data = {
+    title: document.getElementById('debtTitle').value.trim(),
+    kind,
+    person: document.getElementById('debtPerson').value.trim(),
+    amount: parseFloat(document.getElementById('debtAmount').value),
+    due_date: document.getElementById('debtDueDate').value || null,
+    note: document.getElementById('debtNote').value.trim(),
+    monthly: isInst ? parseFloat(document.getElementById('debtMonthly').value) : null,
+    months: isInst ? parseInt(document.getElementById('debtMonths').value) : null,
+  };
+  if (isInst) {
+    const pm = parseInt(document.getElementById('debtPaidMonths').value) || 0;
+    data.paid_months = pm;
+    data.paid = pm * (data.monthly || 0);
+  } else {
+    data.paid = parseFloat(document.getElementById('debtPaid').value) || 0;
+    data.paid_months = 0;
+  }
+  setLoading(true);
+  try {
+    if (id) {
+      const updated = await window.DB.update('debts', id, data);
+      const i = state.debts.findIndex(x => x.id === id);
+      if (i >= 0) state.debts[i] = updated;
+    } else {
+      const newRow = await window.DB.insert('debts', data);
+      state.debts.push(newRow);
+    }
+    closeModal('debtModal');
+    toast('Qarz saqlandi');
+    renderDebts();
+  } catch (err) { toast(err.message, 'error'); }
+  finally { setLoading(false); }
+}
+
+function editDebt(id) {
+  const d = state.debts.find(x => x.id === id);
+  if (!d) return;
+  document.getElementById('debtId').value = d.id;
+  document.getElementById('debtKind').value = d.kind;
+  document.getElementById('debtTitle').value = d.title;
+  document.getElementById('debtPerson').value = d.person || '';
+  document.getElementById('debtAmount').value = d.amount;
+  document.getElementById('debtDueDate').value = d.due_date || '';
+  document.getElementById('debtNote').value = d.note || '';
+  document.getElementById('debtMonthly').value = d.monthly || '';
+  document.getElementById('debtMonths').value = d.months || '';
+  document.getElementById('debtPaidMonths').value = d.paid_months || 0;
+  document.getElementById('debtPaid').value = d.paid || 0;
+  toggleDebtFields();
+  document.getElementById('debtModal').classList.add('active');
+}
+
+async function deleteDebt(id) {
+  if (!confirm("Qarzni o'chirishni tasdiqlaysizmi?")) return;
+  setLoading(true);
+  try {
+    await window.DB.remove('debts', id);
+    state.debts = state.debts.filter(x => x.id !== id);
+    toast("O'chirildi");
+    renderDebts();
+  } catch (err) { toast(err.message, 'error'); }
+  finally { setLoading(false); }
+}
+
+async function markDebtPaid(id) {
+  const d = state.debts.find(x => x.id === id);
+  if (!d) return;
+  setLoading(true);
+  try {
+    const updated = await window.DB.update('debts', id, { paid: Number(d.amount) });
+    const i = state.debts.findIndex(x => x.id === id);
+    if (i >= 0) state.debts[i] = updated;
+    toast("To'liq to'landi deb belgilandi");
+    renderDebts();
+  } catch (err) { toast(err.message, 'error'); }
+  finally { setLoading(false); }
+}
+
+async function markDebtMonthPaid(id) {
+  const d = state.debts.find(x => x.id === id);
+  if (!d) return;
+  const currentPaidMonths = d.paid_months || 0;
+  if (currentPaidMonths >= d.months) { toast("Allaqachon to'liq to'langan"); return; }
+  setLoading(true);
+  try {
+    const newPaidMonths = currentPaidMonths + 1;
+    const newPaid = newPaidMonths * Number(d.monthly);
+    const updated = await window.DB.update('debts', id, { paid: newPaid, paid_months: newPaidMonths });
+    const i = state.debts.findIndex(x => x.id === id);
+    if (i >= 0) state.debts[i] = updated;
+    // Auto-add expense for installment payments (only if it's something I bought, i.e. installment is "i_owe" type by nature)
+    if (d.kind === 'installment') {
+      const expense = await window.DB.insert('expenses', {
+        category: 'Boshqa', amount: Number(d.monthly), date: today(),
+        note: `${d.title} ${newPaidMonths}-oy to'lovi`, recurring: null
+      });
+      state.expenses.push(expense);
+    }
+    toast(`✓ ${newPaidMonths}-oy to'lovi belgilandi`);
+    renderDebts();
+    renderDashboard();
+  } catch (err) { toast(err.message, 'error'); }
+  finally { setLoading(false); }
+}
+
+function renderDebts() {
+  const list = document.getElementById('debtsList');
+  if (!list) return;
+  const filtered = state.debts.filter(d => state.debtFilter === 'all' || d.kind === state.debtFilter);
+
+  // Stats
+  const iOweTotal = state.debts.filter(d => d.kind === 'i_owe').reduce((s,d) => s + Math.max(0, Number(d.amount) - Number(d.paid||0)), 0);
+  const owedToMeTotal = state.debts.filter(d => d.kind === 'owed_to_me').reduce((s,d) => s + Math.max(0, Number(d.amount) - Number(d.paid||0)), 0);
+  const instTotal = state.debts.filter(d => d.kind === 'installment').reduce((s,d) => s + Math.max(0, Number(d.amount) - Number(d.paid||0)), 0);
+  const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setText('debtIOweTotal', fmt(iOweTotal));
+  setText('debtOwedToMe', fmt(owedToMeTotal));
+  setText('debtInstallmentTotal', fmt(instTotal));
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">💳</div><div>Qarzlar yo'q</div><div style="margin-top:8px;font-size:12px;">Yangi qarz yoki muddatli to'lov qo'shing</div></div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(d => renderDebtCard(d)).join('');
+}
+
+function renderDebtCard(d) {
+  const kindLabel = { i_owe: '⬇️ Men qarzdorman', owed_to_me: '⬆️ Menga qarzdor', installment: '📅 Muddatli to\'lov' }[d.kind];
+  const remaining = Math.max(0, Number(d.amount) - Number(d.paid || 0));
+  const progress = d.amount > 0 ? (Number(d.paid || 0) / Number(d.amount)) * 100 : 0;
+  const isFullyPaid = remaining === 0;
+
+  let dueDateHtml = '';
+  if (d.due_date && !isFullyPaid && d.kind !== 'installment') {
+    const today_d = today();
+    const cls = d.due_date < today_d ? 'due-date-overdue' : (d.due_date <= addMonths(today_d, 0).split('T')[0] ? 'due-date-warn' : '');
+    const label = d.due_date < today_d ? '⚠️ Muddat o\'tdi: ' : '📅 Muddat: ';
+    dueDateHtml = `<div class="${cls}" style="font-size:12px;margin-bottom:8px">${label}${fmtDate(d.due_date)}</div>`;
+  }
+
+  let actionHtml = '';
+  if (d.kind === 'installment') {
+    const monthly = Number(d.monthly || 0);
+    const totalMonths = Number(d.months || 0);
+    const paidMonths = Number(d.paid_months || 0);
+    if (paidMonths < totalMonths) {
+      const nextDate = d.due_date ? addMonths(d.due_date, paidMonths) : addMonths(d.created_at || today(), paidMonths + 1);
+      actionHtml = `
+        <div class="next-payment">
+          <div class="next-payment-info">
+            <div class="next-payment-label">Keyingi · ${paidMonths + 1}/${totalMonths}-oy</div>
+            <div class="next-payment-date">${fmtDate(nextDate)}</div>
+          </div>
+          <div class="next-payment-amount">${fmt(monthly)}</div>
+          <button class="btn-pay" onclick="markDebtMonthPaid('${d.id}')">✓ To'ladim</button>
+        </div>`;
+    } else {
+      actionHtml = `<div class="next-payment done"><div class="next-payment-info"><div class="next-payment-label">🎉 Tabriklayman!</div><div class="next-payment-date">To'liq to'landi</div></div></div>`;
+    }
+  } else if (!isFullyPaid) {
+    actionHtml = `<div class="next-payment"><div class="next-payment-info"><div class="next-payment-label">Holat</div><div class="next-payment-date">To'lanmadi</div></div><button class="btn-pay" onclick="markDebtPaid('${d.id}')">✓ To'liq to'landi</button></div>`;
+  } else {
+    actionHtml = `<div class="next-payment done"><div class="next-payment-info"><div class="next-payment-label">✅</div><div class="next-payment-date">To'liq to'landi</div></div></div>`;
+  }
+
+  return `
+    <div class="credit-card">
+      <div class="credit-top">
+        <div>
+          <div class="credit-bank">${escapeHtml(d.title)}</div>
+          ${d.person ? `<div class="credit-purpose">${escapeHtml(d.person)}</div>` : ''}
+        </div>
+        <span class="debt-badge ${d.kind}">${kindLabel}</span>
+      </div>
+      <div class="credit-label">Qoldiq</div>
+      <div class="credit-amount-main">${fmt(remaining)}</div>
+      <div class="progress"><div class="progress-fill" style="width:${progress}%"></div></div>
+      <div class="credit-progress-info">
+        <span>${progress.toFixed(0)}% to'langan</span>
+        <span>${fmt(d.paid || 0)} / ${fmt(d.amount)}</span>
+      </div>
+      ${dueDateHtml}
+      ${actionHtml}
+      ${d.note ? `<div class="muted" style="font-size:12px;margin-top:8px">${escapeHtml(d.note)}</div>` : ''}
+      <div class="credit-actions">
+        <button class="icon-btn" onclick="editDebt('${d.id}')">✏️ Tahrirlash</button>
+        <button class="icon-btn danger" onclick="deleteDebt('${d.id}')">🗑️</button>
+      </div>
+    </div>`;
 }
 
 // ============ START ============
