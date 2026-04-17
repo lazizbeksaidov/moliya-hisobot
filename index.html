@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
 
@@ -424,12 +424,12 @@
       <div class="form-group"><label>Bank nomi</label><input type="text" id="creditBank" required placeholder="Kapitalbank"></div>
       <div class="form-group"><label>Maqsad</label><input type="text" id="creditPurpose" placeholder="Avtomobil, uy-joy..."></div>
       <div class="form-row">
-        <div class="form-group"><label>Umumiy summa</label><input type="number" id="creditAmount" required min="0" step="1000"></div>
+        <div class="form-group"><label>Umumiy summa</label><input type="number" id="creditAmount" required min="0" step="any" inputmode="numeric"></div>
         <div class="form-group"><label>Foiz (%)</label><input type="number" id="creditRate" required min="0" step="0.1" value="0"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Muddat (oy)</label><input type="number" id="creditMonths" required min="1" value="12"></div>
-        <div class="form-group"><label>Oylik to'lov</label><input type="number" id="creditMonthly" required min="0" step="1000"></div>
+        <div class="form-group"><label>Oylik to'lov</label><input type="number" id="creditMonthly" required min="0" step="any" inputmode="numeric"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Boshlanish sanasi</label><input type="date" id="creditStart" required></div>
@@ -465,7 +465,7 @@
         </select>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Summa</label><input type="number" id="incomeAmount" required min="0" step="1000"></div>
+        <div class="form-group"><label>Summa</label><input type="number" id="incomeAmount" required min="0" step="any" inputmode="numeric"></div>
         <div class="form-group"><label>Sana</label><input type="date" id="incomeDate" required></div>
       </div>
       <div class="form-group"><label>Izoh</label><input type="text" id="incomeNote" placeholder="Ixtiyoriy"></div>
@@ -511,7 +511,7 @@
         </select>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Summa</label><input type="number" id="expenseAmount" required min="0" step="1000"></div>
+        <div class="form-group"><label>Summa</label><input type="number" id="expenseAmount" required min="0" step="any" inputmode="numeric"></div>
         <div class="form-group"><label>Sana</label><input type="date" id="expenseDate" required></div>
       </div>
       <div class="form-group"><label>Izoh</label><input type="text" id="expenseNote" placeholder="Ixtiyoriy"></div>
@@ -556,7 +556,7 @@
       </div>
       <div class="form-group">
         <label>Oylik limit (so'm)</label>
-        <input type="number" id="budgetLimit" required min="0" step="1000">
+        <input type="number" id="budgetLimit" required min="0" step="any" inputmode="numeric">
       </div>
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" onclick="closeModal('budgetModal')">Bekor</button>
@@ -592,13 +592,13 @@
         <input type="text" id="debtPerson" placeholder="Masalan: Akmal aka, Texnomart">
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Umumiy summa</label><input type="number" id="debtAmount" required min="0" step="1000"></div>
+        <div class="form-group"><label>Umumiy summa</label><input type="number" id="debtAmount" required min="0" step="any" inputmode="numeric"></div>
         <div class="form-group"><label>To'lash sanasi</label><input type="date" id="debtDueDate"></div>
       </div>
 
       <div id="debtInstallmentBlock" style="display:none">
         <div class="form-row">
-          <div class="form-group"><label>Oylik to'lov</label><input type="number" id="debtMonthly" min="0" step="1000"></div>
+          <div class="form-group"><label>Oylik to'lov</label><input type="number" id="debtMonthly" min="0" step="any" inputmode="numeric"></div>
           <div class="form-group"><label>Muddat (oy)</label><input type="number" id="debtMonths" min="1"></div>
         </div>
         <div class="form-group">
@@ -610,7 +610,7 @@
       <div id="debtSimpleBlock">
         <div class="form-group">
           <label>To'langan summa</label>
-          <input type="number" id="debtPaid" min="0" step="1000" value="0">
+          <input type="number" id="debtPaid" min="0" step="any" inputmode="numeric" value="0">
         </div>
       </div>
 
@@ -626,9 +626,9 @@
 <div class="toast" id="toast"></div>
 <div class="loading" id="loading"><div class="spinner"></div></div>
 
-<script src="config.js?v=4"></script>
-<script src="db.js?v=4"></script>
-<script src="app.js?v=4"></script>
+<script src="config.js?v=5"></script>
+<script src="db.js?v=5"></script>
+<script src="app.js?v=5"></script>
 <script>
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
