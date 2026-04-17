@@ -5,7 +5,7 @@
 // Aks holda → localStorage (demo/offline rejim)
 // ============================================================
 
-const TABLES = ['credits', 'incomes', 'expenses', 'budgets', 'debts'];
+const TABLES = ['credits', 'incomes', 'expenses', 'budgets', 'debts', 'subscriptions'];
 
 class DB {
   constructor() {

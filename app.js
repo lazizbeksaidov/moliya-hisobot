@@ -8,6 +8,7 @@ const state = {
   expenses: [],
   budgets: [],
   debts: [],
+  subscriptions: [],
   period: 'day',
   authMode: 'signin',
   debtFilter: 'all',
@@ -77,6 +78,8 @@ const escapeHtml = (s) => !s ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&a
 
 // ============ INIT ============
 async function init() {
+  // Theme va til auth ekrani uchun ham
+  if (typeof initThemeAndLang === 'function') initThemeAndLang();
   await window.DB.init();
   window.DB.onAuthChange = async (user) => {
     await afterAuth(user);
@@ -96,6 +99,12 @@ async function afterAuth(user) {
   if (user) {
     showApp();
     await loadAll();
+    // Features init
+    if (typeof initThemeAndLang === 'function') initThemeAndLang();
+    if (typeof initUsdRate === 'function') await initUsdRate();
+    if (typeof initGlobalSearch === 'function') initGlobalSearch();
+    if (typeof initVoiceButtons === 'function') initVoiceButtons();
+    if (typeof renderSubPresets === 'function') renderSubPresets();
     renderAll();
   }
 }
@@ -197,18 +206,20 @@ function saveSetup() {
 // ============ DATA LOAD ============
 async function loadAll() {
   try {
-    const [credits, incomes, expenses, budgets, debts] = await Promise.all([
+    const [credits, incomes, expenses, budgets, debts, subs] = await Promise.all([
       window.DB.list('credits'),
       window.DB.list('incomes'),
       window.DB.list('expenses'),
       window.DB.list('budgets'),
       window.DB.list('debts').catch(() => []),
+      window.DB.list('subscriptions').catch(() => []),
     ]);
     state.credits = credits;
     state.incomes = incomes;
     state.expenses = expenses;
     state.budgets = budgets;
     state.debts = debts;
+    state.subscriptions = subs;
     await window.DB.loadProfile();
 
     // Process recurring
@@ -270,10 +281,12 @@ function renderAll() {
   renderCalendar();
   renderCredits();
   renderDebts();
+  if (typeof renderSubs === 'function') renderSubs();
   renderIncome();
   renderExpenses();
   renderBudget();
   renderAnalytics();
+  if (typeof renderCompareCharts === 'function') renderCompareCharts();
 }
 
 function updateUserBadge() {
@@ -320,6 +333,7 @@ function switchTab(name) {
   if (name === 'debts') renderDebts();
   if (name === 'credits') renderCredits();
   if (name === 'calendar') renderCalendar();
+  if (name === 'subscriptions' && typeof renderSubs === 'function') { renderSubs(); renderSubPresets(); }
 }
 
 // ============ MODAL ============
@@ -629,12 +643,14 @@ function renderCreditCard(c) {
 async function saveIncome(e) {
   e.preventDefault();
   const id = document.getElementById('incomeId').value;
+  const iTagsEl = document.getElementById('incomeTags');
   const data = {
     source: document.getElementById('incomeSource').value,
     amount: parseFloat(document.getElementById('incomeAmount').value),
     date: document.getElementById('incomeDate').value,
     note: document.getElementById('incomeNote').value.trim(),
     recurring: document.getElementById('incomeRecurring').value || null,
+    tags: iTagsEl && typeof parseTags === 'function' ? parseTags(iTagsEl.value) : null,
   };
   setLoading(true);
   try {
@@ -663,6 +679,7 @@ function editIncome(id) {
   document.getElementById('incomeDate').value = x.date;
   document.getElementById('incomeNote').value = x.note || '';
   document.getElementById('incomeRecurring').value = x.recurring || '';
+  const it = document.getElementById('incomeTags'); if (it) it.value = (x.tags || []).join(' ');
   document.getElementById('incomeModal').classList.add('active');
 }
 
@@ -697,6 +714,7 @@ function renderIncome() {
       <div class="trans-info">
         <div class="trans-title">${escapeHtml(x.source)}</div>
         ${x.note ? `<div class="trans-note">${escapeHtml(x.note)}</div>` : ''}
+        ${typeof formatTags === 'function' && x.tags ? formatTags(x.tags) : ''}
       </div>
       <div>
         <div class="trans-amount income">+${fmt(x.amount)}</div>
@@ -713,12 +731,14 @@ function renderIncome() {
 async function saveExpense(e) {
   e.preventDefault();
   const id = document.getElementById('expenseId').value;
+  const tagsEl = document.getElementById('expenseTags');
   const data = {
     category: document.getElementById('expenseCategory').value,
     amount: parseFloat(document.getElementById('expenseAmount').value),
     date: document.getElementById('expenseDate').value,
     note: document.getElementById('expenseNote').value.trim(),
     recurring: document.getElementById('expenseRecurring').value || null,
+    tags: tagsEl && typeof parseTags === 'function' ? parseTags(tagsEl.value) : null,
   };
   setLoading(true);
   try {
@@ -762,6 +782,7 @@ function editExpense(id) {
   document.getElementById('expenseDate').value = x.date;
   document.getElementById('expenseNote').value = x.note || '';
   document.getElementById('expenseRecurring').value = x.recurring || '';
+  const et = document.getElementById('expenseTags'); if (et) et.value = (x.tags || []).join(' ');
   document.getElementById('expenseModal').classList.add('active');
 }
 
@@ -798,6 +819,7 @@ function renderExpenses() {
       <div class="trans-info">
         <div class="trans-title">${escapeHtml(x.category)}</div>
         ${x.note ? `<div class="trans-note">${escapeHtml(x.note)}</div>` : ''}
+        ${typeof formatTags === 'function' && x.tags ? formatTags(x.tags) : ''}
       </div>
       <div>
         <div class="trans-amount expense">-${fmt(x.amount)}</div>
@@ -980,6 +1002,7 @@ function renderRecent() {
       <div class="trans-info">
         <div class="trans-title">${escapeHtml(x.title)}</div>
         ${x.note ? `<div class="trans-note">${escapeHtml(x.note)}</div>` : ''}
+        ${typeof formatTags === 'function' && x.tags ? formatTags(x.tags) : ''}
       </div>
       <div>
         <div class="trans-amount ${x.type}">${x.type === 'income' ? '+' : '-'}${fmt(x.amount)}</div>

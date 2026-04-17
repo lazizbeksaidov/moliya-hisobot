@@ -10,7 +10,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="styles.css?v=9">
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.28/dist/jspdf.plugin.autotable.min.js"></script>
+<link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
 
@@ -108,13 +110,14 @@
     <nav class="nav">
       <button class="nav-item active" data-tab="dashboard"><span class="nav-icon">📊</span>Bosh sahifa</button>
       <button class="nav-item" data-tab="calendar"><span class="nav-icon">📆</span>Kalendar</button>
-      <button class="nav-item" data-tab="credits"><span class="nav-icon">🏦</span>Kreditlar</button>
-      <button class="nav-item" data-tab="debts"><span class="nav-icon">💳</span>Qarzlar</button>
-      <button class="nav-item" data-tab="income"><span class="nav-icon">💰</span>Daromad</button>
-      <button class="nav-item" data-tab="expenses"><span class="nav-icon">💸</span>Xarajatlar</button>
-      <button class="nav-item" data-tab="budget"><span class="nav-icon">🎯</span>Byudjet</button>
-      <button class="nav-item" data-tab="analytics"><span class="nav-icon">📈</span>Tahlil</button>
-      <button class="nav-item" data-tab="settings"><span class="nav-icon">⚙️</span>Sozlamalar</button>
+      <button class="nav-item" data-tab="credits"><span class="nav-icon">🏦</span><span data-i18n="nav.credits">Kreditlar</span></button>
+      <button class="nav-item" data-tab="debts"><span class="nav-icon">💳</span><span data-i18n="nav.debts">Qarzlar</span></button>
+      <button class="nav-item" data-tab="subscriptions"><span class="nav-icon">📺</span><span data-i18n="nav.subs">Obunalar</span></button>
+      <button class="nav-item" data-tab="income"><span class="nav-icon">💰</span><span data-i18n="nav.income">Daromad</span></button>
+      <button class="nav-item" data-tab="expenses"><span class="nav-icon">💸</span><span data-i18n="nav.expenses">Xarajatlar</span></button>
+      <button class="nav-item" data-tab="budget"><span class="nav-icon">🎯</span><span data-i18n="nav.budget">Byudjet</span></button>
+      <button class="nav-item" data-tab="analytics"><span class="nav-icon">📈</span><span data-i18n="nav.analytics">Tahlil</span></button>
+      <button class="nav-item" data-tab="settings"><span class="nav-icon">⚙️</span><span data-i18n="nav.settings">Sozlamalar</span></button>
     </nav>
     <div class="sidebar-footer">
       <div class="balance-card">
@@ -125,6 +128,18 @@
   </aside>
 
   <main class="main">
+    <!-- GLOBAL TOP BAR -->
+    <div class="top-bar">
+      <div class="global-search">
+        <input type="search" id="globalSearch" placeholder="🔍 Hamma joyda qidirish..." autocomplete="off">
+        <div class="search-results" id="searchResults"></div>
+      </div>
+      <div class="top-actions">
+        <div class="usd-rate" id="usdRate" title="USD/UZS kursi"></div>
+        <button class="icon-btn-lg" id="themeBtn" title="Tema almashtirish">🌓</button>
+      </div>
+    </div>
+
     <!-- DASHBOARD -->
     <section class="tab active" id="tab-dashboard">
       <header class="page-header">
@@ -290,6 +305,36 @@
       <div class="credits-list" id="debtsList"></div>
     </section>
 
+    <!-- SUBSCRIPTIONS -->
+    <section class="tab" id="tab-subscriptions">
+      <header class="page-header">
+        <div><h1>Obunalar</h1><p class="subtitle">Netflix, Spotify, iCloud va boshqa oylik to'lovlar</p></div>
+        <button class="btn btn-primary" onclick="openSubModal()">+ Obuna qo'shish</button>
+      </header>
+
+      <div class="stats-grid stats-grid-3">
+        <div class="stat-card stat-expense">
+          <div class="stat-icon">📺</div>
+          <div class="stat-content"><div class="stat-label">Oylik jami</div><div class="stat-value" id="subsMonthly">0</div></div>
+        </div>
+        <div class="stat-card stat-credit">
+          <div class="stat-icon">📅</div>
+          <div class="stat-content"><div class="stat-label">Yillik taxmin</div><div class="stat-value" id="subsYearly">0</div></div>
+        </div>
+        <div class="stat-card stat-saving">
+          <div class="stat-icon">⚡</div>
+          <div class="stat-content"><div class="stat-label">Faol obunalar</div><div class="stat-value" id="subsActive">0</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>📋 Taklif qilingan obunalar (tez qo'shish)</h3></div>
+        <div class="sub-presets" id="subPresets"></div>
+      </div>
+
+      <div class="subs-list" id="subsList"></div>
+    </section>
+
     <!-- INCOME -->
     <section class="tab" id="tab-income">
       <header class="page-header">
@@ -354,10 +399,13 @@
     <section class="tab" id="tab-analytics">
       <header class="page-header">
         <div><h1>Tahlil</h1><p class="subtitle">Moliyaviy ko'rsatkichlaringiz</p></div>
-        <div class="period-switch">
-          <button class="period-btn active" data-period="day">Kunlik</button>
-          <button class="period-btn" data-period="week">Haftalik</button>
-          <button class="period-btn" data-period="month">Oylik</button>
+        <div class="action-group">
+          <div class="period-switch">
+            <button class="period-btn active" data-period="day">Kunlik</button>
+            <button class="period-btn" data-period="week">Haftalik</button>
+            <button class="period-btn" data-period="month">Oylik</button>
+          </div>
+          <button class="btn btn-secondary" onclick="exportMonthlyPdf()">📄 PDF hisobot</button>
         </div>
       </header>
       <div class="stats-grid">
@@ -382,6 +430,19 @@
         <div class="card"><div class="card-header"><h3>Daromad vs Xarajat</h3></div><div class="chart-wrap"><canvas id="trendChart"></canvas></div></div>
         <div class="card"><div class="card-header"><h3>Kategoriyalar</h3></div><div class="chart-wrap"><canvas id="catPieChart"></canvas></div></div>
       </div>
+      <div class="card">
+        <div class="card-header">
+          <h3>📊 Oylar taqqoslash (shu oy vs o'tgan oy)</h3>
+        </div>
+        <div class="chart-wrap"><canvas id="compareChart"></canvas></div>
+        <div id="compareInsights" class="insights"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>📅 Yillik tendentsiya (oxirgi 12 oy)</h3></div>
+        <div class="chart-wrap"><canvas id="yearTrendChart"></canvas></div>
+      </div>
+
       <div class="card"><div class="card-header"><h3>💡 Aqlli tavsiyalar</h3></div><div class="insights" id="insights"></div></div>
     </section>
 
@@ -399,6 +460,56 @@
               <div id="modeEmail" class="muted" style="font-size:12px"></div>
             </div>
             <div class="account-actions" id="accountActions"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>Ko'rinish</h3></div>
+        <div class="card-body">
+          <div class="setting-row">
+            <div>
+              <div style="font-weight:600">Tema</div>
+              <div class="muted" style="margin:0">Qorong'i yoki yorug'</div>
+            </div>
+            <div class="theme-picker">
+              <button class="theme-opt" data-theme="dark">🌙 Qorong'i</button>
+              <button class="theme-opt" data-theme="light">☀️ Yorug'</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div style="font-weight:600">Asosiy rang</div>
+              <div class="muted" style="margin:0">Tugmalar va aksent rangi</div>
+            </div>
+            <div class="accent-picker">
+              <button class="accent-opt" data-accent="blue" style="background:#4f8cff"></button>
+              <button class="accent-opt" data-accent="green" style="background:#10b981"></button>
+              <button class="accent-opt" data-accent="purple" style="background:#a855f7"></button>
+              <button class="accent-opt" data-accent="orange" style="background:#f59e0b"></button>
+              <button class="accent-opt" data-accent="pink" style="background:#ec4899"></button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div style="font-weight:600">Til</div>
+              <div class="muted" style="margin:0">Language / Язык</div>
+            </div>
+            <select id="langSelect" style="width:auto">
+              <option value="uz">O'zbek</option>
+              <option value="ru">Русский</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div style="font-weight:600">USD ekvivalenti</div>
+              <div class="muted" style="margin:0">Summalar yonida dollar miqdori ham ko'rinsin</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="usdToggle">
+              <span class="toggle-slider"></span>
+            </label>
           </div>
         </div>
       </div>
@@ -441,9 +552,9 @@
   <nav class="mobile-nav" id="mobileNav">
     <button class="mnav active" data-tab="dashboard"><span>📊</span>Bosh</button>
     <button class="mnav" data-tab="calendar"><span>📆</span>Kalendar</button>
-    <button class="mnav" data-tab="credits"><span>🏦</span>Kredit</button>
-    <button class="mnav" data-tab="debts"><span>💳</span>Qarz</button>
+    <button class="mnav" data-tab="subscriptions"><span>📺</span>Obuna</button>
     <button class="mnav" data-tab="expenses"><span>💸</span>Xarajat</button>
+    <button class="mnav" data-tab="settings"><span>⚙️</span>Boshqa</button>
   </nav>
 </div>
 
@@ -509,6 +620,7 @@
         <div class="form-group"><label>Sana</label><input type="date" id="incomeDate" required></div>
       </div>
       <div class="form-group"><label>Izoh</label><input type="text" id="incomeNote" placeholder="Ixtiyoriy"></div>
+      <div class="form-group"><label>Teglar</label><input type="text" id="incomeTags" placeholder="#bonus #loyiha"></div>
       <div class="form-group">
         <label>Takrorlanish</label>
         <select id="incomeRecurring">
@@ -554,7 +666,14 @@
         <div class="form-group"><label>Summa</label><input type="number" id="expenseAmount" required min="0" step="any" inputmode="numeric"></div>
         <div class="form-group"><label>Sana</label><input type="date" id="expenseDate" required></div>
       </div>
-      <div class="form-group"><label>Izoh</label><input type="text" id="expenseNote" placeholder="Ixtiyoriy"></div>
+      <div class="form-group">
+        <label>Izoh <button type="button" class="voice-btn" id="voiceExpense" title="Ovoz bilan">🎤</button></label>
+        <input type="text" id="expenseNote" placeholder="Ixtiyoriy">
+      </div>
+      <div class="form-group">
+        <label>Teglar (bo'sh joy bilan ajrating)</label>
+        <input type="text" id="expenseTags" placeholder="#sayohat #kitoblar">
+      </div>
       <div class="form-group">
         <label>Takrorlanish</label>
         <select id="expenseRecurring">
@@ -600,6 +719,44 @@
       </div>
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" onclick="closeModal('budgetModal')">Bekor</button>
+        <button type="submit" class="btn btn-primary">Saqlash</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- SUB MODAL -->
+<div class="modal" id="subModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="subModalTitle">Yangi obuna</h3>
+      <button class="close" onclick="closeModal('subModal')">×</button>
+    </div>
+    <form id="subForm" onsubmit="saveSub(event)">
+      <input type="hidden" id="subId">
+      <div class="form-row">
+        <div class="form-group"><label>Nomi</label><input type="text" id="subName" required placeholder="Netflix, Spotify..."></div>
+        <div class="form-group"><label>Ikonka</label><input type="text" id="subIcon" placeholder="📺" maxlength="2"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Summa</label><input type="number" id="subAmount" required min="0" step="any" inputmode="numeric"></div>
+        <div class="form-group">
+          <label>Valyuta</label>
+          <select id="subCurrency"><option value="UZS">UZS (so'm)</option><option value="USD">USD</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Davr</label>
+          <select id="subCycle"><option value="monthly">Oylik</option><option value="yearly">Yillik</option><option value="weekly">Haftalik</option></select>
+        </div>
+        <div class="form-group"><label>Keyingi to'lov</label><input type="date" id="subNext" required></div>
+      </div>
+      <div class="form-group"><label>Karta / hisob</label><input type="text" id="subCard" placeholder="Uzcard 1234"></div>
+      <div class="form-group"><label>Oxirgi marta ishlatganda</label><input type="date" id="subLastUsed"><div class="hint-text">Agar 3 oydan ko'p o'tgan bo'lsa, "foydalanilmayotgan obuna" deb belgilanadi</div></div>
+      <div class="form-group"><label>Izoh</label><input type="text" id="subNote"></div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('subModal')">Bekor</button>
         <button type="submit" class="btn btn-primary">Saqlash</button>
       </div>
     </form>
@@ -666,9 +823,10 @@
 <div class="toast" id="toast"></div>
 <div class="loading" id="loading"><div class="spinner"></div></div>
 
-<script src="config.js?v=9"></script>
-<script src="db.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="config.js?v=10"></script>
+<script src="db.js?v=10"></script>
+<script src="app.js?v=10"></script>
+<script src="features.js?v=10"></script>
 <script>
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
