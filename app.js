@@ -356,6 +356,7 @@ function openModal(id) {
     document.getElementById('creditMonths').value = 12;
     document.getElementById('creditPaidMonths').value = 0;
     document.getElementById('creditPaymentDay').value = '';
+    const nd = document.getElementById('creditNextDue'); if (nd) nd.value = '';
     document.getElementById('creditModalTitle').textContent = 'Yangi kredit';
   }
   if (id === 'debtModal') {
@@ -385,6 +386,7 @@ async function saveCredit(e) {
   const monthly = parseFloat(document.getElementById('creditMonthly').value);
   const paidMonths = parseInt(document.getElementById('creditPaidMonths').value) || 0;
   const payDay = parseInt(document.getElementById('creditPaymentDay').value);
+  const ndEl = document.getElementById('creditNextDue');
   const data = {
     bank: document.getElementById('creditBank').value.trim(),
     purpose: document.getElementById('creditPurpose').value.trim(),
@@ -392,10 +394,11 @@ async function saveCredit(e) {
     rate: parseFloat(document.getElementById('creditRate').value) || 0,
     months: parseInt(document.getElementById('creditMonths').value) || 12,
     monthly: monthly,
-    start: document.getElementById('creditStart').value,
+    start: document.getElementById('creditStart').value || null,
     paid_months: paidMonths,
     paid: paidMonths * monthly,
     payment_day: (payDay && payDay >= 1 && payDay <= 31) ? payDay : null,
+    next_due_date: ndEl && ndEl.value ? ndEl.value : null,
   };
   setLoading(true);
   try {
@@ -428,6 +431,8 @@ function editCredit(id) {
   document.getElementById('creditStart').value = c.start || c.start_date;
   document.getElementById('creditPaidMonths').value = c.paid_months || Math.round((c.paid || 0) / (c.monthly || 1));
   document.getElementById('creditPaymentDay').value = c.payment_day || '';
+  const ndEl2 = document.getElementById('creditNextDue');
+  if (ndEl2) ndEl2.value = c.next_due_date || '';
   document.getElementById('creditModalTitle').textContent = 'Kreditni tahrirlash';
   document.getElementById('creditModal').classList.add('active');
 }
@@ -519,6 +524,21 @@ function withPaymentDay(dateStr, paymentDay) {
   return d.toISOString().split('T')[0];
 }
 
+// N-oylik to'lov sanasini hisoblash (next_due_date'ni e'tiborga oladi)
+// monthIdx: 1..totalMonths, paidMonths: necha oy to'langan
+function creditPaymentDate(c, monthIdx) {
+  const paidMonths = Number(c.paid_months || 0);
+  if (c.next_due_date) {
+    // Anchor = (paid_months + 1)-chi to'lov sanasi = next_due_date
+    // MonthIdx sanasi = anchor + (monthIdx - paid_months - 1) oy
+    const offset = monthIdx - paidMonths - 1;
+    return withPaymentDay(addMonths(c.next_due_date, offset), c.payment_day);
+  }
+  // Eski formula
+  const startDate = c.start || c.start_date;
+  return withPaymentDay(addMonths(startDate, monthIdx), c.payment_day);
+}
+
 function renderCredits() {
   const list = document.getElementById('creditsList');
   if (!state.credits.length) {
@@ -539,9 +559,8 @@ function renderCredits() {
   let nextPay = null;
   let nextPayCredit = null;
   activeCredits.forEach(c => {
-    const startDate = c.start || c.start_date;
     const pm = Number(c.paid_months || 0);
-    const next = withPaymentDay(addMonths(startDate, pm + 1), c.payment_day);
+    const next = creditPaymentDate(c, pm + 1);
     if (!nextPay || next < nextPay) { nextPay = next; nextPayCredit = c; }
   });
 
@@ -562,7 +581,7 @@ function renderCreditCard(c) {
 
   let nextPaymentHtml = '';
   if (paidMonths < totalMonths) {
-    const nextDate = withPaymentDay(addMonths(startDate, paidMonths + 1), c.payment_day);
+    const nextDate = creditPaymentDate(c, paidMonths + 1);
     const today_d = today();
     const dueClass = nextDate < today_d ? 'overdue' : (nextDate === today_d ? 'due' : '');
     const dueLabel = nextDate < today_d ? '⚠️ Muddat o\'tdi' : nextDate === today_d ? '🔔 Bugun to\'lash' : 'Keyingi to\'lov';
@@ -590,7 +609,7 @@ function renderCreditCard(c) {
   if (isOpen) {
     const rows = [];
     for (let i = 1; i <= totalMonths; i++) {
-      const date = withPaymentDay(addMonths(startDate, i), c.payment_day);
+      const date = creditPaymentDate(c, i);
       const isPaid = i <= paidMonths;
       rows.push(`
         <div class="schedule-row ${isPaid ? 'paid' : ''}">
@@ -1541,9 +1560,9 @@ function collectEvents() {
     const totalMonths = Number(c.months);
     const paidMonths = Number(c.paid_months || 0);
     const startDate = c.start || c.start_date;
-    if (!startDate || !totalMonths) return;
+    if (!totalMonths || (!startDate && !c.next_due_date)) return;
     for (let i = 1; i <= totalMonths; i++) {
-      const date = withPaymentDay(addMonths(startDate, i), c.payment_day);
+      const date = creditPaymentDate(c, i);
       push(date, {
         type: 'credit',
         title: c.bank,
