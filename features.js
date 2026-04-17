@@ -92,6 +92,14 @@ function initThemeAndLang() {
       if (typeof renderAll === 'function') renderAll();
     });
   }
+  const aeT = document.getElementById('autoExpenseToggle');
+  if (aeT) {
+    aeT.checked = localStorage.getItem('fin_autoexpense') === '1';
+    aeT.addEventListener('change', () => {
+      localStorage.setItem('fin_autoexpense', aeT.checked ? '1' : '0');
+      toast(aeT.checked ? 'Avto xarajat yoqildi' : 'Avto xarajat o\'chirildi');
+    });
+  }
 }
 
 // ============ USD RATE (CBU API) ============
@@ -344,13 +352,16 @@ async function payAndRollSub(id) {
     const i = state.subscriptions.findIndex(x => x.id === id);
     if (i >= 0) state.subscriptions[i] = updated;
 
-    // Xarajatga qo'shish
-    const amtUzs = s.currency === 'USD' ? s.amount * USD_RATE : s.amount;
-    const ex = await window.DB.insert('expenses', {
-      category: 'Obuna', amount: amtUzs, date: today(),
-      note: `${s.name} obunasi`, tags: ['#obuna']
-    });
-    state.expenses.push(ex);
+    // Xarajatga qo'shish (faqat Sozlamalarda yoqilgan bo'lsa)
+    const addExpense = localStorage.getItem('fin_autoexpense') === '1';
+    if (addExpense) {
+      const amtUzs = s.currency === 'USD' ? s.amount * USD_RATE : s.amount;
+      const ex = await window.DB.insert('expenses', {
+        category: 'Obuna', amount: amtUzs, date: today(),
+        note: `${s.name} obunasi`, tags: ['#obuna']
+      });
+      state.expenses.push(ex);
+    }
 
     toast(`${s.name} to'landi, keyingi: ${fmtDate(newNext)}`);
     renderSubs();

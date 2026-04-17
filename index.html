@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.28/dist/jspdf.plugin.autotable.min.js"></script>
-<link rel="stylesheet" href="styles.css?v=11">
+<link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
 
@@ -511,6 +511,24 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
+          <div class="setting-row">
+            <div>
+              <div style="font-weight:600">"✓ To'ladim" avto xarajat yozsin</div>
+              <div class="muted" style="margin:0">Kredit yoki obuna to'lovini belgilaganda xarajatga ham avto qo'shilsin. O'chiq bo'lsa — faqat belgilanadi, balansga ta'sir qilmaydi.</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="autoExpenseToggle">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>🧹 Ma'lumotlarni tozalash</h3></div>
+        <div class="card-body">
+          <p class="muted">Agar ilgari "✓ To'ladim" tugmasi tufayli avto yaratilgan kredit xarajatlari balansni buzayotgan bo'lsa — hammasini o'chiring.</p>
+          <button class="btn btn-danger-soft" onclick="removeAutoCreditExpenses()">🗑️ Avto kredit xarajatlarini o'chirish</button>
         </div>
       </div>
 
@@ -830,10 +848,10 @@
 <div class="toast" id="toast"></div>
 <div class="loading" id="loading"><div class="spinner"></div></div>
 
-<script src="config.js?v=11"></script>
-<script src="db.js?v=11"></script>
-<script src="app.js?v=11"></script>
-<script src="features.js?v=11"></script>
+<script src="config.js?v=12"></script>
+<script src="db.js?v=12"></script>
+<script src="app.js?v=12"></script>
+<script src="features.js?v=12"></script>
 <script>
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {

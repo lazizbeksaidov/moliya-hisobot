@@ -483,6 +483,7 @@ async function markCreditMonthPaid(id) {
   if (!c) return;
   const currentPaidMonths = c.paid_months || 0;
   if (currentPaidMonths >= c.months) { toast('Kredit allaqachon to\'liq to\'langan'); return; }
+  const addExpense = localStorage.getItem('fin_autoexpense') === '1';
   setLoading(true);
   try {
     const newPaidMonths = currentPaidMonths + 1;
@@ -490,15 +491,18 @@ async function markCreditMonthPaid(id) {
     const updated = await window.DB.update('credits', id, { paid: newPaid, paid_months: newPaidMonths });
     const i = state.credits.findIndex(x => x.id === id);
     if (i >= 0) state.credits[i] = updated;
-    const expense = await window.DB.insert('expenses', {
-      category: 'Kredit', amount: Number(c.monthly), date: today(),
-      note: `${c.bank} ${newPaidMonths}-oy to'lovi`, recurring: null
-    });
-    state.expenses.push(expense);
+    if (addExpense) {
+      const expense = await window.DB.insert('expenses', {
+        category: 'Kredit', amount: Number(c.monthly), date: today(),
+        note: `${c.bank} ${newPaidMonths}-oy to'lovi`, recurring: null
+      });
+      state.expenses.push(expense);
+      renderExpenses();
+    }
     toast(`✓ ${newPaidMonths}-oy to'lovi belgilandi`);
     renderCredits();
     renderDashboard();
-    renderExpenses();
+    renderCalendar();
   } catch (err) { toast(err.message, 'error'); }
   finally { setLoading(false); }
 }
@@ -1239,6 +1243,24 @@ function renderInsights(income, expense, expenses) {
 }
 
 // ============ SETTINGS ============
+async function removeAutoCreditExpenses() {
+  const autoExps = state.expenses.filter(e =>
+    e.category === 'Kredit' && (e.note || '').match(/(-oy to'lovi|kreditga to'lov)/i)
+  );
+  if (!autoExps.length) { toast('Avto yaratilgan kredit xarajatlari topilmadi'); return; }
+  if (!confirm(`${autoExps.length} ta avto yaratilgan kredit xarajatini o'chirishni tasdiqlaysizmi?`)) return;
+  setLoading(true);
+  try {
+    for (const e of autoExps) {
+      await window.DB.remove('expenses', e.id);
+    }
+    state.expenses = state.expenses.filter(e => !autoExps.find(x => x.id === e.id));
+    toast(`${autoExps.length} ta yozuv o'chirildi`);
+    renderAll();
+  } catch (err) { toast(err.message, 'error'); }
+  finally { setLoading(false); }
+}
+
 async function saveStartBalance() {
   const v = parseFloat(document.getElementById('startBalance').value) || 0;
   setLoading(true);
@@ -1445,13 +1467,15 @@ async function markDebtMonthPaid(id) {
     const updated = await window.DB.update('debts', id, { paid: newPaid, paid_months: newPaidMonths });
     const i = state.debts.findIndex(x => x.id === id);
     if (i >= 0) state.debts[i] = updated;
-    // Auto-add expense for installment payments (only if it's something I bought, i.e. installment is "i_owe" type by nature)
-    if (d.kind === 'installment') {
+    // Auto-add expense (faqat Sozlamalarda yoqilgan bo'lsa)
+    const addExpense = localStorage.getItem('fin_autoexpense') === '1';
+    if (d.kind === 'installment' && addExpense) {
       const expense = await window.DB.insert('expenses', {
         category: 'Boshqa', amount: Number(d.monthly), date: today(),
         note: `${d.title} ${newPaidMonths}-oy to'lovi`, recurring: null
       });
       state.expenses.push(expense);
+      renderExpenses();
     }
     toast(`✓ ${newPaidMonths}-oy to'lovi belgilandi`);
     renderDebts();
