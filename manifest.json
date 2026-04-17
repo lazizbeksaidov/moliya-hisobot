@@ -1,0 +1,13 @@
+{
+  "name": "Moliya — Shaxsiy Moliyaviy Hisobotchi",
+  "short_name": "Moliya",
+  "description": "Shaxsiy kreditlar, daromad va xarajatlarni kuzatish",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b0f17",
+  "theme_color": "#4f8cff",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

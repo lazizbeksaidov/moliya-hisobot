@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f17">
+<title>Moliya — Shaxsiy Moliyaviy Hisobotchi</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div class="auth-screen" id="authScreen" style="display:none">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="logo-icon-big">₿</div>
+      <h1>Moliya</h1>
+      <p>Shaxsiy moliyaviy hisobotchi</p>
+    </div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" data-auth="signin">Kirish</button>
+      <button class="auth-tab" data-auth="signup">Ro'yxatdan o'tish</button>
+    </div>
+
+    <form id="authForm" onsubmit="doAuth(event)">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="authEmail" required placeholder="siz@example.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Parol</label>
+        <input type="password" id="authPassword" required minlength="6" placeholder="Kamida 6 ta belgi" autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary btn-full" id="authSubmit">Kirish</button>
+    </form>
+
+    <div class="auth-divider"><span>yoki</span></div>
+
+    <button class="btn btn-secondary btn-full" onclick="useLocalMode()">
+      💾 Lokal rejimda davom etish
+      <span class="hint">(faqat shu qurilmada)</span>
+    </button>
+
+    <div class="auth-footer" id="authStatus"></div>
+  </div>
+</div>
+
+<!-- SETUP WIZARD -->
+<div class="auth-screen" id="setupScreen" style="display:none">
+  <div class="auth-card" style="max-width:560px">
+    <div class="auth-logo">
+      <div class="logo-icon-big">⚙️</div>
+      <h1>Bulutga ulanish</h1>
+      <p>Ma'lumotlaringizni barcha qurilmalar o'rtasida sinxron qilish uchun Supabase sozlang</p>
+    </div>
+
+    <div class="setup-steps">
+      <div class="setup-step">
+        <div class="step-num">1</div>
+        <div>
+          <div class="step-title"><a href="https://supabase.com" target="_blank">supabase.com</a> → "New project" → bepul loyiha yarating</div>
+        </div>
+      </div>
+      <div class="setup-step">
+        <div class="step-num">2</div>
+        <div>
+          <div class="step-title">SQL Editor → quyidagi schema'ni paste qiling → Run</div>
+          <button class="btn btn-secondary btn-sm" onclick="copySchema()">📋 Schema'ni nusxa olish</button>
+        </div>
+      </div>
+      <div class="setup-step">
+        <div class="step-num">3</div>
+        <div>
+          <div class="step-title">Settings → API bo'limidan URL va anon key'ni shu yerga kiriting</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:20px">
+      <label>Project URL</label>
+      <input type="url" id="setupUrl" placeholder="https://xxxx.supabase.co">
+    </div>
+    <div class="form-group">
+      <label>Anon / public key</label>
+      <input type="text" id="setupKey" placeholder="eyJhbGci...">
+    </div>
+    <div class="auth-actions">
+      <button class="btn btn-secondary" onclick="hideSetup()">Bekor qilish</button>
+      <button class="btn btn-primary" onclick="saveSetup()">Saqlash va ulanish</button>
+    </div>
+    <div class="auth-footer muted" style="margin-top:12px">
+      Kalitlar shu qurilmada (localStorage) saqlanadi, hech qaerga yuborilmaydi.
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="app" id="mainApp" style="display:none">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">₿</div>
+      <div>
+        <div class="logo-title">Moliya</div>
+        <div class="logo-sub" id="userBadge">Lokal rejim</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" data-tab="dashboard"><span class="nav-icon">📊</span>Bosh sahifa</button>
+      <button class="nav-item" data-tab="credits"><span class="nav-icon">🏦</span>Kreditlar</button>
+      <button class="nav-item" data-tab="income"><span class="nav-icon">💰</span>Daromad</button>
+      <button class="nav-item" data-tab="expenses"><span class="nav-icon">💸</span>Xarajatlar</button>
+      <button class="nav-item" data-tab="budget"><span class="nav-icon">🎯</span>Byudjet</button>
+      <button class="nav-item" data-tab="analytics"><span class="nav-icon">📈</span>Tahlil</button>
+      <button class="nav-item" data-tab="settings"><span class="nav-icon">⚙️</span>Sozlamalar</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="balance-card">
+        <div class="balance-label">Umumiy balans</div>
+        <div class="balance-value" id="totalBalance">0</div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- DASHBOARD -->
+    <section class="tab active" id="tab-dashboard">
+      <header class="page-header">
+        <div>
+          <h1>Bosh sahifa</h1>
+          <p class="subtitle" id="todayDate"></p>
+        </div>
+        <div class="quick-actions">
+          <button class="btn btn-success" onclick="openModal('incomeModal')">+ Daromad</button>
+          <button class="btn btn-danger-soft" onclick="openModal('expenseModal')">+ Xarajat</button>
+        </div>
+      </header>
+
+      <div class="stats-grid">
+        <div class="stat-card stat-income">
+          <div class="stat-icon">💰</div>
+          <div class="stat-content">
+            <div class="stat-label">Oylik daromad</div>
+            <div class="stat-value" id="monthIncome">0</div>
+            <div class="stat-meta" id="monthIncomeCount">0 ta kirim</div>
+          </div>
+        </div>
+        <div class="stat-card stat-expense">
+          <div class="stat-icon">💸</div>
+          <div class="stat-content">
+            <div class="stat-label">Oylik xarajat</div>
+            <div class="stat-value" id="monthExpense">0</div>
+            <div class="stat-meta" id="monthExpenseCount">0 ta chiqim</div>
+          </div>
+        </div>
+        <div class="stat-card stat-credit">
+          <div class="stat-icon">🏦</div>
+          <div class="stat-content">
+            <div class="stat-label">Kredit qarzi</div>
+            <div class="stat-value" id="totalCredit">0</div>
+            <div class="stat-meta" id="monthlyPayment">Oylik to'lov: 0</div>
+          </div>
+        </div>
+        <div class="stat-card stat-saving">
+          <div class="stat-icon">💵</div>
+          <div class="stat-content">
+            <div class="stat-label">Sof jamg'arma</div>
+            <div class="stat-value" id="monthSaving">0</div>
+            <div class="stat-meta" id="savingPercent">0% daromaddan</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="card">
+          <div class="card-header"><h3>Oxirgi 7 kunlik faoliyat</h3></div>
+          <div class="chart-wrap"><canvas id="weekChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Xarajatlar kategoriyasi</h3></div>
+          <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="card">
+          <div class="card-header">
+            <h3>Oxirgi tranzaktsiyalar</h3>
+            <button class="btn-link" onclick="switchTab('expenses')">Barchasi →</button>
+          </div>
+          <div class="transactions" id="recentTransactions"></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3>Byudjet holati (shu oy)</h3>
+            <button class="btn-link" onclick="switchTab('budget')">Boshqarish →</button>
+          </div>
+          <div class="budget-mini" id="budgetMini"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CREDITS -->
+    <section class="tab" id="tab-credits">
+      <header class="page-header">
+        <div><h1>Kreditlar</h1><p class="subtitle">Bank kreditlari va qarzlaringiz</p></div>
+        <button class="btn btn-primary" onclick="openModal('creditModal')">+ Kredit qo'shish</button>
+      </header>
+      <div class="stats-grid stats-grid-3">
+        <div class="stat-card stat-credit">
+          <div class="stat-icon">💳</div>
+          <div class="stat-content"><div class="stat-label">Umumiy qoldiq</div><div class="stat-value" id="creditTotalRemaining">0</div></div>
+        </div>
+        <div class="stat-card stat-expense">
+          <div class="stat-icon">📅</div>
+          <div class="stat-content"><div class="stat-label">Oylik to'lov</div><div class="stat-value" id="creditMonthlySum">0</div></div>
+        </div>
+        <div class="stat-card stat-income">
+          <div class="stat-icon">✅</div>
+          <div class="stat-content"><div class="stat-label">To'langan</div><div class="stat-value" id="creditTotalPaid">0</div></div>
+        </div>
+      </div>
+      <div class="credits-list" id="creditsList"></div>
+    </section>
+
+    <!-- INCOME -->
+    <section class="tab" id="tab-income">
+      <header class="page-header">
+        <div><h1>Daromadlar</h1><p class="subtitle">Barcha tushumlar ro'yxati</p></div>
+        <button class="btn btn-success" onclick="openModal('incomeModal')">+ Daromad qo'shish</button>
+      </header>
+      <div class="filters">
+        <input type="search" id="incomeSearch" placeholder="🔍 Qidiruv..." oninput="renderIncome()">
+        <select id="incomeFilter" onchange="renderIncome()">
+          <option value="all">Barchasi</option>
+          <option value="today">Bugun</option>
+          <option value="week">Shu hafta</option>
+          <option value="month">Shu oy</option>
+          <option value="year">Shu yil</option>
+        </select>
+      </div>
+      <div class="card"><div class="transactions" id="incomeList"></div></div>
+    </section>
+
+    <!-- EXPENSES -->
+    <section class="tab" id="tab-expenses">
+      <header class="page-header">
+        <div><h1>Xarajatlar</h1><p class="subtitle">Barcha chiqimlar ro'yxati</p></div>
+        <button class="btn btn-danger-soft" onclick="openModal('expenseModal')">+ Xarajat qo'shish</button>
+      </header>
+      <div class="filters">
+        <input type="search" id="expenseSearch" placeholder="🔍 Qidiruv..." oninput="renderExpenses()">
+        <select id="expenseFilter" onchange="renderExpenses()">
+          <option value="all">Barchasi</option>
+          <option value="today">Bugun</option>
+          <option value="week">Shu hafta</option>
+          <option value="month">Shu oy</option>
+          <option value="year">Shu yil</option>
+        </select>
+        <select id="expenseCatFilter" onchange="renderExpenses()">
+          <option value="all">Barcha kategoriya</option>
+          <option value="Oziq-ovqat">🍔 Oziq-ovqat</option>
+          <option value="Transport">🚗 Transport</option>
+          <option value="Kommunal">💡 Kommunal</option>
+          <option value="Kiyim">👕 Kiyim</option>
+          <option value="Salomatlik">💊 Salomatlik</option>
+          <option value="Ta'lim">📚 Ta'lim</option>
+          <option value="Ko'ngilochar">🎬 Ko'ngilochar</option>
+          <option value="Uy">🏠 Uy</option>
+          <option value="Kredit">🏦 Kredit to'lovi</option>
+          <option value="Boshqa">📦 Boshqa</option>
+        </select>
+      </div>
+      <div class="card"><div class="transactions" id="expensesList"></div></div>
+    </section>
+
+    <!-- BUDGET -->
+    <section class="tab" id="tab-budget">
+      <header class="page-header">
+        <div><h1>Byudjet</h1><p class="subtitle">Har oyga kategoriya bo'yicha xarajat limitlari</p></div>
+        <button class="btn btn-primary" onclick="openModal('budgetModal')">+ Limit qo'shish</button>
+      </header>
+      <div class="budget-grid" id="budgetList"></div>
+    </section>
+
+    <!-- ANALYTICS -->
+    <section class="tab" id="tab-analytics">
+      <header class="page-header">
+        <div><h1>Tahlil</h1><p class="subtitle">Moliyaviy ko'rsatkichlaringiz</p></div>
+        <div class="period-switch">
+          <button class="period-btn active" data-period="day">Kunlik</button>
+          <button class="period-btn" data-period="week">Haftalik</button>
+          <button class="period-btn" data-period="month">Oylik</button>
+        </div>
+      </header>
+      <div class="stats-grid">
+        <div class="stat-card stat-income">
+          <div class="stat-icon">📈</div>
+          <div class="stat-content"><div class="stat-label" id="anaIncomeLabel">Daromad</div><div class="stat-value" id="anaIncome">0</div></div>
+        </div>
+        <div class="stat-card stat-expense">
+          <div class="stat-icon">📉</div>
+          <div class="stat-content"><div class="stat-label" id="anaExpenseLabel">Xarajat</div><div class="stat-value" id="anaExpense">0</div></div>
+        </div>
+        <div class="stat-card stat-saving">
+          <div class="stat-icon">⚖️</div>
+          <div class="stat-content"><div class="stat-label">Qoldiq</div><div class="stat-value" id="anaBalance">0</div></div>
+        </div>
+        <div class="stat-card stat-credit">
+          <div class="stat-icon">🎯</div>
+          <div class="stat-content"><div class="stat-label">O'rtacha/kun</div><div class="stat-value" id="anaAvgDay">0</div></div>
+        </div>
+      </div>
+      <div class="dashboard-grid">
+        <div class="card"><div class="card-header"><h3>Daromad vs Xarajat</h3></div><div class="chart-wrap"><canvas id="trendChart"></canvas></div></div>
+        <div class="card"><div class="card-header"><h3>Kategoriyalar</h3></div><div class="chart-wrap"><canvas id="catPieChart"></canvas></div></div>
+      </div>
+      <div class="card"><div class="card-header"><h3>💡 Aqlli tavsiyalar</h3></div><div class="insights" id="insights"></div></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="tab" id="tab-settings">
+      <header class="page-header"><div><h1>Sozlamalar</h1><p class="subtitle">Profil va ma'lumotlarni boshqarish</p></div></header>
+
+      <div class="card">
+        <div class="card-header"><h3>Hisob</h3></div>
+        <div class="card-body">
+          <div class="account-row">
+            <div>
+              <div class="muted">Hozirgi rejim</div>
+              <div id="modeStatus" style="font-weight:600;font-size:15px"></div>
+              <div id="modeEmail" class="muted" style="font-size:12px"></div>
+            </div>
+            <div class="account-actions" id="accountActions"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>Boshlang'ich balans</h3></div>
+        <div class="card-body">
+          <p class="muted">Hozirgi jami pulingizni kiriting (bank + naqd). Hisob-kitoblar shu yerdan boshlanadi.</p>
+          <div class="input-row">
+            <input type="number" id="startBalance" placeholder="0">
+            <button class="btn btn-primary" onclick="saveStartBalance()">Saqlash</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>Ma'lumotlar</h3></div>
+        <div class="card-body">
+          <div class="settings-actions">
+            <button class="btn btn-secondary" onclick="exportData()">📥 Eksport (JSON)</button>
+            <label class="btn btn-secondary">
+              📤 Import
+              <input type="file" accept=".json" onchange="importData(event)" style="display:none">
+            </label>
+            <button class="btn btn-danger" onclick="clearAll()">🗑️ Hammasini o'chirish</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>Haqida</h3></div>
+        <div class="card-body">
+          <p class="muted">Moliya v2 — Supabase bilan ishlaydi. Bulut rejimida ma'lumotlar shifrlanib saqlanadi va barcha qurilmalaringizdan ko'rinadi. Lokal rejimda faqat shu brauzerda saqlanadi.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- MOBILE BOTTOM NAV -->
+  <nav class="mobile-nav" id="mobileNav">
+    <button class="mnav active" data-tab="dashboard"><span>📊</span>Bosh</button>
+    <button class="mnav" data-tab="income"><span>💰</span>Daromad</button>
+    <button class="mnav" data-tab="expenses"><span>💸</span>Xarajat</button>
+    <button class="mnav" data-tab="analytics"><span>📈</span>Tahlil</button>
+    <button class="mnav" data-tab="settings"><span>⚙️</span>Boshqa</button>
+  </nav>
+</div>
+
+<!-- CREDIT MODAL -->
+<div class="modal" id="creditModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="creditModalTitle">Yangi kredit</h3>
+      <button class="close" onclick="closeModal('creditModal')">×</button>
+    </div>
+    <form id="creditForm" onsubmit="saveCredit(event)">
+      <input type="hidden" id="creditId">
+      <div class="form-group"><label>Bank nomi</label><input type="text" id="creditBank" required placeholder="Kapitalbank"></div>
+      <div class="form-group"><label>Maqsad</label><input type="text" id="creditPurpose" placeholder="Avtomobil, uy-joy..."></div>
+      <div class="form-row">
+        <div class="form-group"><label>Umumiy summa</label><input type="number" id="creditAmount" required min="0" step="1000"></div>
+        <div class="form-group"><label>Foiz (%)</label><input type="number" id="creditRate" required min="0" step="0.1" value="0"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Muddat (oy)</label><input type="number" id="creditMonths" required min="1" value="12"></div>
+        <div class="form-group"><label>Oylik to'lov</label><input type="number" id="creditMonthly" required min="0" step="1000"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Boshlanish sanasi</label><input type="date" id="creditStart" required></div>
+        <div class="form-group"><label>To'langan</label><input type="number" id="creditPaid" min="0" step="1000" value="0"></div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('creditModal')">Bekor</button>
+        <button type="submit" class="btn btn-primary">Saqlash</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- INCOME MODAL -->
+<div class="modal" id="incomeModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Yangi daromad</h3>
+      <button class="close" onclick="closeModal('incomeModal')">×</button>
+    </div>
+    <form id="incomeForm" onsubmit="saveIncome(event)">
+      <input type="hidden" id="incomeId">
+      <div class="form-group">
+        <label>Manba</label>
+        <select id="incomeSource" required>
+          <option value="Ish haqi">💼 Ish haqi</option>
+          <option value="Biznes">📊 Biznes</option>
+          <option value="Freelance">💻 Freelance</option>
+          <option value="Sovg'a">🎁 Sovg'a</option>
+          <option value="Investitsiya">📈 Investitsiya</option>
+          <option value="Boshqa">📦 Boshqa</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Summa</label><input type="number" id="incomeAmount" required min="0" step="1000"></div>
+        <div class="form-group"><label>Sana</label><input type="date" id="incomeDate" required></div>
+      </div>
+      <div class="form-group"><label>Izoh</label><input type="text" id="incomeNote" placeholder="Ixtiyoriy"></div>
+      <div class="form-group">
+        <label>Takrorlanish</label>
+        <select id="incomeRecurring">
+          <option value="">— yo'q —</option>
+          <option value="monthly">Har oy</option>
+          <option value="weekly">Har hafta</option>
+        </select>
+        <div class="hint-text">Keyingi kirim sanasi kelganida dashboard'da eslatiladi</div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('incomeModal')">Bekor</button>
+        <button type="submit" class="btn btn-primary">Saqlash</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- EXPENSE MODAL -->
+<div class="modal" id="expenseModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Yangi xarajat</h3>
+      <button class="close" onclick="closeModal('expenseModal')">×</button>
+    </div>
+    <form id="expenseForm" onsubmit="saveExpense(event)">
+      <input type="hidden" id="expenseId">
+      <div class="form-group">
+        <label>Kategoriya</label>
+        <select id="expenseCategory" required>
+          <option value="Oziq-ovqat">🍔 Oziq-ovqat</option>
+          <option value="Transport">🚗 Transport</option>
+          <option value="Kommunal">💡 Kommunal</option>
+          <option value="Kiyim">👕 Kiyim</option>
+          <option value="Salomatlik">💊 Salomatlik</option>
+          <option value="Ta'lim">📚 Ta'lim</option>
+          <option value="Ko'ngilochar">🎬 Ko'ngilochar</option>
+          <option value="Uy">🏠 Uy-joy</option>
+          <option value="Kredit">🏦 Kredit to'lovi</option>
+          <option value="Boshqa">📦 Boshqa</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Summa</label><input type="number" id="expenseAmount" required min="0" step="1000"></div>
+        <div class="form-group"><label>Sana</label><input type="date" id="expenseDate" required></div>
+      </div>
+      <div class="form-group"><label>Izoh</label><input type="text" id="expenseNote" placeholder="Ixtiyoriy"></div>
+      <div class="form-group">
+        <label>Takrorlanish</label>
+        <select id="expenseRecurring">
+          <option value="">— yo'q —</option>
+          <option value="monthly">Har oy</option>
+          <option value="weekly">Har hafta</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('expenseModal')">Bekor</button>
+        <button type="submit" class="btn btn-primary">Saqlash</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- BUDGET MODAL -->
+<div class="modal" id="budgetModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="budgetModalTitle">Byudjet limiti</h3>
+      <button class="close" onclick="closeModal('budgetModal')">×</button>
+    </div>
+    <form id="budgetForm" onsubmit="saveBudget(event)">
+      <input type="hidden" id="budgetId">
+      <div class="form-group">
+        <label>Kategoriya</label>
+        <select id="budgetCategory" required>
+          <option value="Oziq-ovqat">🍔 Oziq-ovqat</option>
+          <option value="Transport">🚗 Transport</option>
+          <option value="Kommunal">💡 Kommunal</option>
+          <option value="Kiyim">👕 Kiyim</option>
+          <option value="Salomatlik">💊 Salomatlik</option>
+          <option value="Ta'lim">📚 Ta'lim</option>
+          <option value="Ko'ngilochar">🎬 Ko'ngilochar</option>
+          <option value="Uy">🏠 Uy-joy</option>
+          <option value="Boshqa">📦 Boshqa</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Oylik limit (so'm)</label>
+        <input type="number" id="budgetLimit" required min="0" step="1000">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('budgetModal')">Bekor</button>
+        <button type="submit" class="btn btn-primary">Saqlash</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="loading" id="loading"><div class="spinner"></div></div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
